@@ -1,0 +1,52 @@
+services:
+  influxdb:
+    image: influxdb:2.7
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME_FILE: /run/secrets/influx_admin_user
+      DOCKER_INFLUXDB_INIT_PASSWORD_FILE: /run/secrets/influx_admin_pass
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG:-edge-org}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_BUCKET:-edge-site}
+      DOCKER_INFLUXDB_INIT_RETENTION: ${INFLUX_RETENTION:-30d}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN_FILE: /run/secrets/influx_admin_token
+    volumes:
+      - influx-data:/var/lib/influxdb2
+      - influx-config:/etc/influxdb2
+    secrets:
+      - influx_admin_user
+      - influx_admin_pass
+      - influx_admin_token
+
+  site-agent:
+    image: ${SITE_AGENT_IMAGE}:${SITE_AGENT_VERSION}
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      INFLUX_URL: ${INFLUX_URL:-http://influxdb:8086}
+      INFLUX_ORG: ${INFLUX_ORG:-edge-org}
+      INFLUX_BUCKET: ${INFLUX_BUCKET:-edge-site}
+      INFLUX_TOKEN_FILE: /run/secrets/influx_admin_token
+    depends_on:
+      - influxdb
+    volumes:
+      - ${IPC_STORAGE_DIR:-/opt/site-agent/storage}:/app/storage
+    secrets:
+      - influx_admin_token
+    ports:
+      - "8000:8000"
+
+volumes:
+  influx-data:
+  influx-config:
+
+secrets:
+  influx_admin_user:
+    file: ./.secrets/influx.admin.user
+  influx_admin_pass:
+    file: ./.secrets/influx.admin.pass
+  influx_admin_token:
+    file: ./.secrets/influx.admin.token

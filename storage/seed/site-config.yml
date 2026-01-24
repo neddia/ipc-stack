@@ -1,0 +1,107 @@
+site: dev
+edges: [{ id: edge-001, prefer: LORA, dev_eui: 2cf7f120641061bd, eth_mac: e89f80123456 }]
+edge_pairs: []
+edge_management:
+  heartbeat_every_s: 0
+  edge_scan_every_s: 0
+  edge_discovery_port: 54322
+  edge_ip_ranges: []
+
+vfds:
+  - vfd_id: fan1
+    edge_id: edge-001
+    model: huanyang-hy
+    unit_id: 1
+    polls:
+      - op: read_acv      # V
+        period_s: 60
+      - op: read_out_a    # A
+        period_s: 60
+      - op: read_out_hz   # Hz
+        period_s: 60
+      - op: read_set_hz
+        period_s: 60
+    safe:
+      mode: safe
+      hz: 45
+      ttl_s: 100
+
+miners:
+  scan_enabled: false
+  scan_every_s: 300  # Host timer cadence: `systemctl edit setpoint-scan-miners.timer`
+  scan_timeout_ms: 800
+  scan_concurrency: 500
+  poll_every_s: 60
+  timeout_ms: 800
+  concurrency: 500
+  influx_bucket: edge-site
+  ip_ranges: ["10.0.10.0/24"]
+  groups:
+    - { id: "row-a", vfd_ids: ["fan1"], ip_ranges: ["192.168.254.0/24"] }
+
+health:
+  enabled: true
+  staleness_every_s: 60
+  staleness_lookback_s: 3600
+  staleness_targets:
+    miner_fans: 120
+    miner_fan_rollup: 300
+    vfd_telemetry: 120
+    optimizer_plan: 300
+    lora_uplink: 300
+
+vfd_power_model:
+  measurement: vfd_telemetry
+  hz_field: out_hz
+  kw_field: kw
+
+  defaults:
+    base_hz: 60
+    motor_eff: 0.90
+    vfd_eff: 0.98
+    idle_w: 30
+    # Optional global hp if most fans share a motor size:
+    hp: 10
+    # Optional global two-point calibration (applies to all fans unless a fan overrides)
+    cal: { hz1: 30, kw1: 3.8, hz2: 60, kw2: 12.5 }
+
+  fans:
+    fan1:
+      # Overrides default calibration just for fan1
+      cal: { hz1: 30, kw1: 3.5, hz2: 60, kw2: 13.5 }
+
+    # fan2 keeps global 'cal', but could override base_hz or hp if needed:
+    # fan2:
+    #   base_hz: 50
+    #   hp: 7.5
+
+    # fan3 can prefit directly:
+    # fan3:
+    #   S_kw_per_h3: 0.82
+    #   idle_w: 45
+physics:
+  gamma: 1.0
+  baseline_w: 0.0
+  fan_power_scale: 1.0
+
+control:
+  hz_min: 20
+  hz_max: 60
+  hz_step: 1
+  optimize_every_s: 300
+  lookback_fit: "60m"
+  slope_window_min: 45
+  fan95_cap: 0.92
+  hotspot_frac_threshold: 0.05
+  hotspot_max_up_hz: 1.0
+  ramp_hz: 2
+  deadband_hz: 0.5
+  min_dJ_frac: 0.005
+  bootstrap_hz: 45
+  default_slope: -0.008
+  slope_min: -0.05
+  slope_max: -0.001
+
+# Only counts live here; physics comes from miner-fans.yml
+miner_types:
+  - { name: "antminer_s9se", num_miners: 1 }
