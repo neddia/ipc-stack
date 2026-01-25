@@ -1,11 +1,11 @@
 site: dev
-edges: [{ id: edge-001, prefer: LORA, dev_eui: 2cf7f120641061bd, eth_mac: e89f80123456 }]
+edges: [{ id: edge-001, prefer: TCP, dev_eui: 2cf7f120641061bd, eth_mac: e89f80123456, allow_fallback: false }]
 edge_pairs: []
 edge_management:
   heartbeat_every_s: 0
-  edge_scan_every_s: 0
-  edge_discovery_port: 54322
-  edge_ip_ranges: []
+  edge_scan_every_s: 180
+  edge_discovery_port: 8080
+  edge_ip_ranges: ["192.168.254.0/24"]
 
 vfds:
   - vfd_id: fan1
@@ -27,7 +27,7 @@ vfds:
       ttl_s: 100
 
 miners:
-  scan_enabled: false
+  scan_enabled: true
   scan_every_s: 300  # Host timer cadence: `systemctl edit setpoint-scan-miners.timer`
   scan_timeout_ms: 800
   scan_concurrency: 500
