@@ -23,6 +23,7 @@ services:
   site-agent:
     image: ${SITE_AGENT_IMAGE}:${SITE_AGENT_VERSION}
     restart: unless-stopped
+    user: "${SITE_AGENT_UID:-1000}:${SITE_AGENT_GID:-1000}"
     env_file:
       - ./.env
     environment:

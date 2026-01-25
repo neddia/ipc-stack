@@ -11,6 +11,17 @@ ENV_FILE="$STACK_DIR/.env"
 
 log() { echo "[ipc-install] $*"; }
 
+persist_env_var() {
+  local file="$1"
+  local key="$2"
+  local value="$3"
+  if grep -q "^${key}=" "$file"; then
+    sed -ri "s|^${key}=.*|${key}=${value}|" "$file"
+  else
+    printf '\n%s=%s\n' "$key" "$value" >>"$file"
+  fi
+}
+
 install_docker_stack() {
   if docker compose version >/dev/null 2>&1; then
     return
@@ -113,11 +124,30 @@ set -a
 source "$ENV_FILE"
 set +a
 
+if [ -z "${SITE_AGENT_UID:-}" ] || [ -z "${SITE_AGENT_GID:-}" ]; then
+  if [ -n "${SUDO_USER:-}" ] && id -u "$SUDO_USER" >/dev/null 2>&1; then
+    SITE_AGENT_UID="$(id -u "$SUDO_USER")"
+    SITE_AGENT_GID="$(id -g "$SUDO_USER")"
+    log "using SITE_AGENT_UID/GID from $SUDO_USER: $SITE_AGENT_UID:$SITE_AGENT_GID"
+    persist_env_var "$ENV_FILE" "SITE_AGENT_UID" "$SITE_AGENT_UID"
+    persist_env_var "$ENV_FILE" "SITE_AGENT_GID" "$SITE_AGENT_GID"
+  else
+    SITE_AGENT_UID="${SITE_AGENT_UID:-1000}"
+    SITE_AGENT_GID="${SITE_AGENT_GID:-1000}"
+  fi
+fi
+
 STORAGE_DIR="${IPC_STORAGE_DIR:-/opt/site-agent/storage}"
 mkdir -p "$STORAGE_DIR"
 if [ ! -f "$STORAGE_DIR/site-config.yml" ]; then
   cp "$STACK_DIR/storage/seed/site-config.yml" "$STORAGE_DIR/site-config.yml"
   log "seeded $STORAGE_DIR/site-config.yml"
+fi
+if [[ "$SITE_AGENT_UID" =~ ^[0-9]+$ ]] && [[ "$SITE_AGENT_GID" =~ ^[0-9]+$ ]]; then
+  chown -R "$SITE_AGENT_UID:$SITE_AGENT_GID" "$STORAGE_DIR"
+  log "ensured $STORAGE_DIR owned by $SITE_AGENT_UID:$SITE_AGENT_GID"
+else
+  log "skipping storage ownership change (invalid SITE_AGENT_UID/GID)"
 fi
 
 if [ "${SKIP_HARDENING:-0}" != "1" ]; then
