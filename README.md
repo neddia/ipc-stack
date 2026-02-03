@@ -49,6 +49,23 @@ If the image is private, pass GHCR creds:
 GHCR_USER="<user>" GHCR_TOKEN="<token>" sudo ./update.sh 1.2.3
 ```
 
+## Dev mode (bind-mount setpoint)
+
+For local development without rebuilding images, use the dev override which
+bind-mounts the `setpoint` repo into the running containers:
+
+```bash
+cd ipc-stack
+# default assumes ../setpoint exists
+./dev-up.sh
+```
+
+You can also set `SETPOINT_DIR` if your repo lives elsewhere:
+
+```bash
+SETPOINT_DIR=/home/you/setpoint ./dev-up.sh
+```
+
 ## Notes
 
 - Secrets are created in `./.secrets/` (gitignored).
