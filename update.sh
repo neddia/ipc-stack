@@ -79,4 +79,7 @@ docker compose pull
 
 docker compose up -d
 
+log "bootstrapping influx buckets/tokens"
+"$STACK_DIR/scripts/bootstrap-influx.sh" || true
+
 log "update complete"

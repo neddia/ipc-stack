@@ -170,6 +170,9 @@ docker compose pull
 
 docker compose up -d
 
+log "bootstrapping influx buckets/tokens"
+"$STACK_DIR/scripts/bootstrap-influx.sh" || true
+
 if [ "${TAILSCALE_SSH_ONLY:-0}" = "1" ]; then
   "$STACK_DIR/scripts/lockdown-ssh.sh" || true
 fi
