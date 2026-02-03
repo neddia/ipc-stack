@@ -79,7 +79,11 @@ docker compose pull
 
 docker compose up -d
 
-log "bootstrapping influx buckets/tokens"
-"$STACK_DIR/scripts/bootstrap-influx.sh" || true
+if [ ! -s "$STACK_DIR/.secrets/influx.telegraf.token" ]; then
+  log "bootstrapping influx buckets/tokens"
+  "$STACK_DIR/scripts/bootstrap-influx.sh" || true
+else
+  log "telegraf token exists; skipping influx bootstrap"
+fi
 
 log "update complete"

@@ -79,7 +79,7 @@ services:
       - sh
       - -c
       - |
-          export INFLUX_TOKEN="$(cat /secrets/influx.telegraf.token 2>/dev/null || cat /secrets/influx.admin.token)"
+          export INFLUX_TOKEN="$(cat /secrets/influx.telegraf.token)"
           exec telegraf --config /etc/telegraf/telegraf.conf
 
 volumes:
