@@ -2,8 +2,14 @@
 set -euo pipefail
 
 STACK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="$STACK_DIR/.env"
-SECRETS_DIR="$STACK_DIR/.secrets"
+if [ -n "${1:-}" ]; then
+  ENV_FILE="$1"
+elif [ -f "$STACK_DIR/.env.dev" ]; then
+  ENV_FILE="$STACK_DIR/.env.dev"
+else
+  ENV_FILE="$STACK_DIR/.env"
+fi
+SECRETS_DIR="${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}"
 
 if [ ! -f "$ENV_FILE" ]; then
   echo "[ipc] missing $ENV_FILE (run install.sh first)" >&2
@@ -16,6 +22,11 @@ source "$ENV_FILE"
 set +a
 
 INFLUX_URL="${INFLUX_URL:-http://127.0.0.1:8086}"
+if [ -n "${INFLUX_BOOTSTRAP_URL:-}" ]; then
+  INFLUX_URL="$INFLUX_BOOTSTRAP_URL"
+elif echo "$INFLUX_URL" | grep -q "://influxdb:"; then
+  INFLUX_URL="http://127.0.0.1:8086"
+fi
 INFLUX_ORG="${INFLUX_ORG:-edge-org}"
 EDGE_BUCKET="${INFLUX_BUCKET:-edge-site}"
 TELEGRAF_BUCKET="${TELEGRAF_BUCKET:-telegraf}"
@@ -67,17 +78,16 @@ bucket_json="$(curl -fsS -H "Authorization: Token $ADMIN_TOKEN" "$INFLUX_URL/api
 
 bucket_id() {
   local name="$1"
-  python3 - <<'PY'
-import json, sys
-name = sys.argv[1]
-data = json.load(sys.stdin)
+  BUCKET_NAME="$name" BUCKET_JSON="$bucket_json" python3 - <<'PY'
+import json, os
+name = os.environ.get("BUCKET_NAME", "")
+data = json.loads(os.environ.get("BUCKET_JSON", "{}"))
 for b in data.get("buckets", []):
     if b.get("name") == name:
         print(b.get("id"))
         raise SystemExit(0)
 raise SystemExit(1)
 PY
-  "$name"
 }
 
 EDGE_BUCKET_ID="$(bucket_id "$EDGE_BUCKET" <<<"$bucket_json" || true)"
@@ -125,6 +135,7 @@ fi
 
 if [ -s "$TELEGRAF_TOKEN_FILE" ]; then
   log "telegraf token already exists"
+  chmod 644 "$TELEGRAF_TOKEN_FILE" || true
 else
   log "creating telegraf token (write to $EDGE_BUCKET + $TELEGRAF_BUCKET)"
   token_json="$(curl -fsS -H "Authorization: Token $ADMIN_TOKEN" \
@@ -154,7 +165,7 @@ PY
     exit 1
   fi
   printf '%s' "$token" > "$TELEGRAF_TOKEN_FILE"
-  chmod 600 "$TELEGRAF_TOKEN_FILE" || true
+  chmod 644 "$TELEGRAF_TOKEN_FILE" || true
 fi
 
 log "influx bootstrap done"

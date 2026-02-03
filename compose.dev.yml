@@ -1,20 +1,26 @@
 services:
   site-agent:
+    image: local/site-agent:dev
+    build:
+      context: ${SETPOINT_DIR:-../setpoint}
+      dockerfile: docker/site-agent.Dockerfile
     environment:
       SITE_CONFIG_PATH: /app/storage/site-config.sim.yml
     volumes:
       - ${SETPOINT_DIR:-../setpoint}/site-agent:/app/site-agent
       - ${SETPOINT_DIR:-../setpoint}/ticlib:/app/ticlib
-      - ${SETPOINT_DIR:-../setpoint}/storage:/app/storage
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
   gatewayd:
+    image: local/gatewayd:dev
+    build:
+      context: ${SETPOINT_DIR:-../setpoint}
+      dockerfile: docker/gatewayd.Dockerfile
     environment:
       SITE_CONFIG_PATH: /data/site-config.sim.yml
       GATEWAYD_PROFILES_DIR: /data/profiles
     volumes:
       - ${SETPOINT_DIR:-../setpoint}/gatewayd:/app/gatewayd
       - ${SETPOINT_DIR:-../setpoint}/ticlib:/app/ticlib
-      - ${SETPOINT_DIR:-../setpoint}/storage:/data
     extra_hosts:
       - "host.docker.internal:host-gateway"

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 STACK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SECRETS_DIR="$STACK_DIR/.secrets"
+SECRETS_DIR="${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}"
 
 mkdir -p "$SECRETS_DIR"
 if [ -n "${SITE_AGENT_UID:-}" ] && [ -n "${SITE_AGENT_GID:-}" ]; then

@@ -25,19 +25,17 @@ services:
     restart: unless-stopped
     user: "${SITE_AGENT_UID:-1000}:${SITE_AGENT_GID:-1000}"
     env_file:
-      - ./.env
+      - ${ENV_FILE:-./.env}
     environment:
       INFLUX_URL: ${INFLUX_URL:-http://influxdb:8086}
       INFLUX_ORG: ${INFLUX_ORG:-edge-org}
       INFLUX_BUCKET: ${INFLUX_BUCKET:-edge-site}
-      INFLUX_TOKEN_FILE: /run/secrets/influx_admin_token
+      INFLUX_TOKEN_FILE: /run/secrets/influx.admin.token
     depends_on:
       - influxdb
     volumes:
       - ${IPC_STORAGE_DIR:-/opt/site-agent/storage}:/app/storage
       - ${IPC_SECRETS_DIR:-/opt/site-agent/.secrets}:/run/secrets:ro
-    secrets:
-      - influx_admin_token
     ports:
       - "8000:8000"
 
@@ -45,7 +43,7 @@ services:
     image: ${GATEWAYD_IMAGE:-ghcr.io/neddia/gatewayd}:${GATEWAYD_VERSION:-latest}
     restart: unless-stopped
     env_file:
-      - ./.env
+      - ${ENV_FILE:-./.env}
     environment:
       SITE_CONFIG_PATH: /data/site-config.yml
       GATEWAYD_DB_PATH: /data/gatewayd.sqlite3
@@ -71,8 +69,10 @@ services:
       HOST_PROC: /host/proc
       HOST_SYS: /host/sys
     volumes:
-      - ./telegraf.conf:/etc/telegraf/telegraf.conf:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./${TELEGRAF_CONF:-telegraf.conf}:/etc/telegraf/telegraf.conf:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
       - /:/host:ro
       - ${IPC_SECRETS_DIR:-/opt/site-agent/.secrets}:/secrets:ro
     command:
@@ -88,8 +88,8 @@ volumes:
 
 secrets:
   influx_admin_user:
-    file: ./.secrets/influx.admin.user
+    file: ${IPC_SECRETS_DIR:-./.secrets}/influx.admin.user
   influx_admin_pass:
-    file: ./.secrets/influx.admin.pass
+    file: ${IPC_SECRETS_DIR:-./.secrets}/influx.admin.pass
   influx_admin_token:
-    file: ./.secrets/influx.admin.token
+    file: ${IPC_SECRETS_DIR:-./.secrets}/influx.admin.token

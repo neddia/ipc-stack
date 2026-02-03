@@ -66,6 +66,10 @@ You can also set `SETPOINT_DIR` if your repo lives elsewhere:
 SETPOINT_DIR=/home/you/setpoint ./dev-up.sh
 ```
 
+`dev-up.sh` will prefer `.env.dev` if present; otherwise it uses `.env`.
+
+For dev, secrets default to `../ipc-secrets` (outside the repo) via `.env.dev`.
+
 ## Notes
 
 - Secrets are created in `./.secrets/` (gitignored).
