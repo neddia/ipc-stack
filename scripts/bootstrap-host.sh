@@ -106,4 +106,10 @@ security_updates
 enable_tailscale
 docker_log_limits
 
+if [ -x /opt/ipc-stack/scripts/enable-mdns.sh ]; then
+  /opt/ipc-stack/scripts/enable-mdns.sh || true
+elif [ -x "$(dirname "$0")/enable-mdns.sh" ]; then
+  "$(dirname "$0")/enable-mdns.sh" || true
+fi
+
 log "host bootstrap complete"
