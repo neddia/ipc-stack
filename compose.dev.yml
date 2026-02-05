@@ -11,6 +11,27 @@ services:
       - ${SETPOINT_DIR:-../setpoint}/ticlib:/app/ticlib
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
+  tailwind:
+    image: local/site-agent:dev
+    build:
+      context: ${SETPOINT_DIR:-../setpoint}
+      dockerfile: docker/site-agent.Dockerfile
+    volumes:
+      - ${SETPOINT_DIR:-../setpoint}/site-agent:/app/site-agent
+      - ${SETPOINT_DIR:-../setpoint}/tailwind.config.js:/app/tailwind.config.js
+      - ${SETPOINT_DIR:-../setpoint}/bin/tailwindcss:/app/bin/tailwindcss
+    working_dir: /app
+    command:
+      - /app/bin/tailwindcss
+      - -c
+      - /app/tailwind.config.js
+      - -i
+      - /app/site-agent/app/static/src/tailwind.css
+      - -o
+      - /app/site-agent/app/static/tailwind.css
+      - --watch
+    restart: unless-stopped
+
   gatewayd:
     image: local/gatewayd:dev
     build:

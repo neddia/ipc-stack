@@ -28,7 +28,7 @@ site_agent:
       cal: { hz1: 30, kw1: 0.2, hz2: 60, kw2: 0.6 }
 
   miners:
-    scan_enabled: false
+    scan_enabled: true
     scan_every_s: 300
     poll_every_s: 60
     timeout_ms: 800
