@@ -62,6 +62,12 @@ if [ -z "${IPC_PUBLIC_KEY_FILE:-}" ] && [ -s "$SECRETS_DIR/ipc_ed25519.pub" ]; t
   export IPC_PUBLIC_KEY_FILE
   echo "[ipc-dev] set IPC_PUBLIC_KEY_FILE=$IPC_PUBLIC_KEY_FILE"
 fi
+if [ -z "${IPC_PRIVATE_KEY_FILE:-}" ] && [ -s "$SECRETS_DIR/ipc_ed25519" ]; then
+  IPC_PRIVATE_KEY_FILE="/run/secrets/ipc_ed25519"
+  persist_env_var "$ENV_FILE" "IPC_PRIVATE_KEY_FILE" "$IPC_PRIVATE_KEY_FILE"
+  export IPC_PRIVATE_KEY_FILE
+  echo "[ipc-dev] set IPC_PRIVATE_KEY_FILE=$IPC_PRIVATE_KEY_FILE"
+fi
 
 cd "$STACK_DIR"
 docker compose -f compose.yml -f compose.dev.yml --env-file "$ENV_FILE" up -d --build

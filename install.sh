@@ -176,6 +176,12 @@ if [ -z "${IPC_PUBLIC_KEY_FILE:-}" ] && [ -s "${IPC_SECRETS_DIR:-$STACK_DIR/.sec
   export IPC_PUBLIC_KEY_FILE
   log "set IPC_PUBLIC_KEY_FILE=$IPC_PUBLIC_KEY_FILE"
 fi
+if [ -z "${IPC_PRIVATE_KEY_FILE:-}" ] && [ -s "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}/ipc_ed25519" ]; then
+  IPC_PRIVATE_KEY_FILE="/run/secrets/ipc_ed25519"
+  persist_env_var "$ENV_FILE" "IPC_PRIVATE_KEY_FILE" "$IPC_PRIVATE_KEY_FILE"
+  export IPC_PRIVATE_KEY_FILE
+  log "set IPC_PRIVATE_KEY_FILE=$IPC_PRIVATE_KEY_FILE"
+fi
 
 docker_login_ghcr
 
