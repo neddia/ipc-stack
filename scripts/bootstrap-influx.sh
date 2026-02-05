@@ -61,19 +61,20 @@ if ! wait_influx; then
   exit 1
 fi
 
-org_json="$(curl -fsS -H "Authorization: Token $ADMIN_TOKEN" "$INFLUX_URL/api/v2/orgs?org=$INFLUX_ORG")"
-ORG_ID="$(python3 - <<'PY'
-import json, sys
-data = json.load(sys.stdin)
-orgs = data.get("orgs") or []
-if not orgs:
-    raise SystemExit(1)
-print(orgs[0]["id"])
-PY
-<<<"$org_json")" || {
+org_json="$(curl -fsS -H "Authorization: Token $ADMIN_TOKEN" \
+  "$INFLUX_URL/api/v2/orgs?org=$INFLUX_ORG")"
+
+ORG_ID="$(python3 -c 'import json,sys
+data=json.load(sys.stdin)
+orgs=data.get("orgs") or []
+print(orgs[0]["id"] if orgs else "")
+' <<<"$org_json")"
+
+if [ -z "$ORG_ID" ]; then
   echo "[ipc] org not found: $INFLUX_ORG" >&2
   exit 1
-}
+fi
+
 
 bucket_json="$(curl -fsS -H "Authorization: Token $ADMIN_TOKEN" "$INFLUX_URL/api/v2/buckets?org=$INFLUX_ORG")"
 
@@ -155,12 +156,11 @@ payload = {
 print(json.dumps(payload))
 PY
 )" )"
-  token="$(python3 - <<'PY'
-import json, sys
-data = json.load(sys.stdin)
-print(data.get("token") or "")
-PY
-<<<"$token_json")"
+token="$(python3 -c 'import json,sys
+d=json.load(sys.stdin)
+print(d.get("token") or "")
+' <<<"$token_json")"
+
   if [ -z "$token" ]; then
     echo "[ipc] failed to create telegraf token" >&2
     exit 1
