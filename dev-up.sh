@@ -38,6 +38,7 @@ fi
 
 cd "$STACK_DIR"
 docker compose -f compose.yml -f compose.dev.yml --env-file "$ENV_FILE" up -d --build
+docker compose -f compose.dev.yml --env-file "$ENV_FILE" up -d --build tailwind
 
 if [ ! -s "$SECRETS_DIR/influx.telegraf.token" ]; then
   IPC_SECRETS_DIR="$SECRETS_DIR" "$STACK_DIR/scripts/bootstrap-influx.sh" "$ENV_FILE" || true
