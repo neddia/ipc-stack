@@ -9,7 +9,6 @@ elif [ -n "${ENV_FILE:-}" ]; then
 else
   ENV_FILE="$STACK_DIR/.env"
 fi
-SECRETS_DIR="${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}"
 
 if [ ! -f "$ENV_FILE" ]; then
   echo "[ipc] missing $ENV_FILE (run install.sh first)" >&2
@@ -20,6 +19,8 @@ set -a
 # shellcheck disable=SC1090
 source "$ENV_FILE"
 set +a
+
+SECRETS_DIR="${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}"
 
 INFLUX_URL="${INFLUX_URL:-http://127.0.0.1:8086}"
 if [ -n "${INFLUX_BOOTSTRAP_URL:-}" ]; then
