@@ -4,8 +4,8 @@ set -euo pipefail
 STACK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [ -n "${1:-}" ]; then
   ENV_FILE="$1"
-elif [ -f "$STACK_DIR/.env.dev" ]; then
-  ENV_FILE="$STACK_DIR/.env.dev"
+elif [ -n "${ENV_FILE:-}" ]; then
+  ENV_FILE="$ENV_FILE"
 else
   ENV_FILE="$STACK_DIR/.env"
 fi
