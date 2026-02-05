@@ -1,4 +1,19 @@
 site: dev
+gatewayd:
+  node_id: "${GATEWAYD_NODE_ID}"
+  db_path: "storage/gatewayd.sqlite3"
+  profiles_dir: "storage/profiles"
+  northbound:
+    host: "0.0.0.0"
+    port: 8080
+    auth:
+      mode: "token"
+      token: "${GATEWAYD_TOKEN}"
+  policy:
+    lease_ttl_s: 10
+    safe_after_s: 15
+    tick_s: 1.0
+    restore_on_present: true
 edges: [{ id: edge-001, prefer: TCP, dev_eui: 2cf7f120641061bd, eth_mac: e89f80123456, allow_fallback: false }]
 edge_pairs: []
 edge_management:
