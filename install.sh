@@ -158,6 +158,14 @@ install_docker_stack
 if [ "${SKIP_TAILSCALE:-0}" != "1" ]; then
   install_tailscale
   tailscale_up
+  if [ -z "${TAILSCALE_IP:-}" ] && command -v tailscale >/dev/null 2>&1; then
+    DETECTED_TS_IP="$(tailscale ip -4 2>/dev/null | head -1 || true)"
+    if [ -n "$DETECTED_TS_IP" ]; then
+      persist_env_var "$ENV_FILE" "TAILSCALE_IP" "$DETECTED_TS_IP"
+      export TAILSCALE_IP="$DETECTED_TS_IP"
+      log "detected TAILSCALE_IP=$DETECTED_TS_IP"
+    fi
+  fi
 fi
 
 "$STACK_DIR/scripts/gen-ipc-secrets.sh"
