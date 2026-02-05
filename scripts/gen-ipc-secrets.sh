@@ -33,6 +33,18 @@ write_secret "$SECRETS_DIR/influx.admin.user" "ipc-admin"
 write_secret "$SECRETS_DIR/influx.admin.pass" "$(rand)"
 write_secret "$SECRETS_DIR/influx.admin.token" "$(rand)"
 
+KEY_PATH="$SECRETS_DIR/ipc_ed25519"
+PUB_PATH="$SECRETS_DIR/ipc_ed25519.pub"
+if [ ! -s "$KEY_PATH" ] || [ ! -s "$PUB_PATH" ]; then
+  if command -v ssh-keygen >/dev/null 2>&1; then
+    ssh-keygen -t ed25519 -N "" -C "ipc" -f "$KEY_PATH" >/dev/null 2>&1
+    chmod 600 "$KEY_PATH" || true
+    chmod 644 "$PUB_PATH" || true
+  else
+    echo "[ipc] warning: ssh-keygen not found; skipping IPC keypair" >&2
+  fi
+fi
+
 if [ -n "${SITE_AGENT_UID:-}" ] && [ -n "${SITE_AGENT_GID:-}" ]; then
   if [[ "$SITE_AGENT_UID" =~ ^[0-9]+$ ]] && [[ "$SITE_AGENT_GID" =~ ^[0-9]+$ ]]; then
     chown "$SITE_AGENT_UID:$SITE_AGENT_GID" "$SECRETS_DIR"/* || true

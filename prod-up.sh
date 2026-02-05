@@ -48,8 +48,13 @@ fi
 SECRETS_DIR="${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}"
 mkdir -p "$SECRETS_DIR"
 
-if [ ! -s "$SECRETS_DIR/influx.admin.token" ]; then
-  IPC_SECRETS_DIR="$SECRETS_DIR" "$STACK_DIR/scripts/gen-ipc-secrets.sh"
+IPC_SECRETS_DIR="$SECRETS_DIR" "$STACK_DIR/scripts/gen-ipc-secrets.sh"
+
+if [ -z "${IPC_PUBLIC_KEY_FILE:-}" ] && [ -s "$SECRETS_DIR/ipc_ed25519.pub" ]; then
+  IPC_PUBLIC_KEY_FILE="/run/secrets/ipc_ed25519.pub"
+  persist_env_var "$ENV_FILE" "IPC_PUBLIC_KEY_FILE" "$IPC_PUBLIC_KEY_FILE"
+  export IPC_PUBLIC_KEY_FILE
+  log "set IPC_PUBLIC_KEY_FILE=$IPC_PUBLIC_KEY_FILE"
 fi
 
 cd "$STACK_DIR"
