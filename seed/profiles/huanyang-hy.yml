@@ -1,0 +1,97 @@
+# storage/profiles/huanyang-hy.yml
+# Huanyang legacy RTU (pseudo-Modbus). You may need to set bus PDs manually once:
+#   PD163 = address, PD164 = baud, PD165 = 8N1
+protocol: hy_rtu
+
+meta:
+  name: Huanyang HY (legacy RTU)
+  notes: |
+    Function codes:
+      0x01 read-code, 0x02 write-code, 0x03 control.
+    Big-endian values, Modbus CRC16 (lo, hi).
+    The 'code' values below are typical but may vary by model/firmware.
+    Adjust codes as needed for your units.
+  infer_running: true
+  running_hz_epsilon: 1.0
+  running_min_hz: 1.0
+
+defaults:
+  # scaling helpers for frequency
+  hz_read_scale: 0.01     # raw -> Hz (u16 centi-Hz)
+  hz_write_scale: 100.0   # Hz -> raw (u16 centi-Hz)
+
+ops:
+  # ----- Core telemetry -----
+  read_set_hz:
+    fn: 0x04
+    cfg: 0x00           # Set F
+    value_type: u16
+    read_scale: 0.01
+    field: set_hz
+
+  read_out_hz:
+    fn: 0x04
+    cfg: 0x01           # Out F
+    value_type: u16
+    read_scale: 0.01
+    field: out_hz
+
+  read_out_a:
+    fn: 0x04
+    cfg: 0x02           # Out A (output current)
+    value_type: u16
+    read_scale: 0.1     # verify on your unit; 0.1 A is common
+    field: out_a
+
+  read_dcv:
+    fn: 0x04
+    cfg: 0x04           # DC bus voltage
+    value_type: u16
+    read_scale: 1.0     # some models use 0.1 → set to 0.1 if needed
+    field: dc_v
+
+  read_acv:
+    fn: 0x04
+    cfg: 0x05           # AC output voltage
+    value_type: u16
+    read_scale: 1.0     # or 0.1 on some models
+    field: ac_v
+
+  read_fault:
+    fn: 0x01
+    code: 0x2103          # FAULT CODE (example)
+    value_type: u16
+    read_scale: 1.0
+
+  # ----- Control and setpoint -----
+  set_hz:
+    fn: 0x05
+    code: 0x2001          # COMMAND FREQUENCY code
+    value_type: u16
+    write_scale: 100.0
+    field: set_hz
+    # Some HY bridges don't reply on write; set true if your device does reply.
+    expect_reply: true
+
+  run:
+    fn: 0x03
+    ctrl_val: 0x01
+    expect_reply: true
+
+  stop:
+    fn: 0x03
+    ctrl_val: 0x08
+    expect_reply: true
+
+  # ----- Generic param access -----
+  read_param:
+    fn: 0x01
+    # expects params: { "code": 0x1234 }
+    value_type: u16
+    read_scale: 1.0
+
+  write_param:
+    fn: 0x02
+    # expects params: { "code": 0x1234, "value": <int> }
+    value_type: u16
+    write_scale: 1.0

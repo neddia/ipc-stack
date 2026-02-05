@@ -1,0 +1,41 @@
+# storage/profiles/modbus/generic_vfd.yaml
+# Generic Modbus RTU/TCP starter profile (new schema).
+# Replace register/coil addresses per your VFD manual.
+
+hz:
+  kind: holding_register
+  addr0: 0x0001
+  scale: 100.0
+
+# Run/stop command coil. Update addr0 to the correct coil for your drive.
+run:
+  kind: coil
+  addr0: 0x0000
+
+write:
+  order: ["hz", "run"]
+  delay_ms: 0
+
+presence:
+  kind: input_register
+  addr0: 0x0009
+  count: 1
+
+# Optional readbacks (only if your drive exposes them)
+actual_hz:
+  kind: input_register
+  addr0: 0x0009
+  scale: 0.01
+
+# Optional direction readback (map values to fwd/rev)
+# direction:
+#   kind: discrete_input
+#   addr0: 0x0002
+#   map:
+#     "0": "fwd"
+#     "1": "rev"
+
+power_kw:
+  kind: input_register
+  addr0: 0x0010
+  scale: 0.001

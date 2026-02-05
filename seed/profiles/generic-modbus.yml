@@ -1,0 +1,54 @@
+# storage/profiles/generic-modbus.yml
+# Generic Modbus RTU starter profile. Replace register addresses per drive manual.
+protocol: modbus_rtu
+
+meta:
+  name: Generic Modbus RTU VFD
+  notes: |
+    This is a template. Update register addresses and scaling for your VFD.
+    Uses 16-bit holding/input registers; big-endian register order (Modbus standard).
+
+defaults:
+  unit_id: 1
+  # For floats (if your VFD returns IEEE-754 in two registers), you'd need a modbus engine
+  # that supports u32/f32 parsing and register endianness. This template assumes u16 values.
+
+ops:
+  read_out_hz:
+    fc: 0x04               # Read Input Registers
+    addr: 0x0009           # EXAMPLE: output frequency register
+    count: 1
+    value_type: u16
+    read_scale: 0.01       # raw 0.01 Hz -> Hz
+
+  read_power_w:
+    fc: 0x04
+    addr: 0x0010           # EXAMPLE: output power register
+    count: 1
+    value_type: u16
+    read_scale: 10.0       # e.g., raw *10 = W (tune per drive)
+
+  read_fault:
+    fc: 0x03               # Read Holding Registers
+    addr: 0x0002           # EXAMPLE: fault/status
+    count: 1
+    value_type: u16
+    read_scale: 1.0
+
+  set_hz:
+    fc: 0x06               # Write Single Register
+    addr: 0x0001           # EXAMPLE: command frequency register
+    value_type: u16
+    write_scale: 100.0     # Hz -> 0.01 Hz
+
+  read_param:
+    fc: 0x03
+    # expects params: { "addr": 1234, "count": 1 }
+    value_type: u16
+    read_scale: 1.0
+
+  write_param:
+    fc: 0x06
+    # expects params: { "addr": 1234, "value": <int> }
+    value_type: u16
+    write_scale: 1.0

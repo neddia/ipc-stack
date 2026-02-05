@@ -1,0 +1,42 @@
+version: 1
+
+profiles:
+  - id: antminer_s9se
+    match_model: "(?i)antminer\\s*s9\\s*se"
+    include_keys: ["^fan[1-2]$"]
+    exclude_keys: ["psu", "aux"]
+    roles:
+      fan1: inlet
+      fan2: outlet
+    use_for_power: ["fan1","fan2"]
+    fans_per_miner: 2
+    rpm_max: 5770
+    rpm_ref: 5770
+    w_ref_per_fan: 28.0
+    eff_floor: 0.50
+
+    cal_rpm1: 5770
+    cal_w1: 32
+    cal_rpm2: 3000
+    cal_w2: 8
+
+  - id: whatsminer_m30s
+    match_model: "(?i)(whatsminer|m30s)"
+    include_keys: ["^Fan\\s*\\d+\\s*Speed$","^Fan\\s*Speed\\s*(In|Out)?$"]
+    exclude_keys: ["PSU","Aux"]
+    roles: {}
+    use_for_power: ["Fan1 Speed","Fan2 Speed"]
+    fans_per_miner: 2
+    rpm_max: 7500
+    rpm_ref: 6000
+    w_ref_per_fan: 26.0
+    eff_floor: 0.48
+
+defaults:
+  include_keys: ["(?i)^fan"]
+  exclude_keys: ["(?i)psu|aux"]
+  use_for_power: []
+  rpm_valid_min: 300
+  rpm_valid_max: 10000
+  rpm_ref: 6000
+  eff_floor: 0.45

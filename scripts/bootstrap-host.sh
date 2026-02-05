@@ -99,12 +99,35 @@ CONF
   fi
 }
 
+seed_profiles() {
+  local root_dir seed_dir storage_dir dest_dir
+  root_dir="$(cd "$(dirname "$0")/.." && pwd)"
+  seed_dir="${root_dir}/seed/profiles"
+  storage_dir="${IPC_STORAGE_DIR:-/opt/site-agent/storage}"
+  dest_dir="${storage_dir}/profiles"
+
+  if [ ! -d "${seed_dir}" ]; then
+    log "no profile seed dir at ${seed_dir}; skipping"
+    return
+  fi
+
+  mkdir -p "${dest_dir}"
+  if [ -n "$(ls -A "${dest_dir}" 2>/dev/null)" ]; then
+    log "profiles already present at ${dest_dir}; leaving unchanged"
+    return
+  fi
+
+  log "seeding profiles to ${dest_dir}"
+  cp -a "${seed_dir}/." "${dest_dir}/"
+}
+
 disable_sleep
 ensure_timesync
 limit_journal
 security_updates
 enable_tailscale
 docker_log_limits
+seed_profiles
 
 if [ -x /opt/ipc-stack/scripts/enable-mdns.sh ]; then
   /opt/ipc-stack/scripts/enable-mdns.sh || true
