@@ -20,6 +20,25 @@ profiles:
     cal_rpm2: 3000
     cal_w2: 8
 
+  - id: antminer_s21
+    match_model: "(?i)antminer\\s*s21"
+    include_keys: ["^fan[1-2]$"]
+    exclude_keys: ["psu", "aux"]
+    roles:
+      fan1: inlet
+      fan2: outlet
+    use_for_power: ["fan1","fan2"]
+    fans_per_miner: 2
+    rpm_max: 7600
+    rpm_ref: 7000
+    w_ref_per_fan: 35.0
+    eff_floor: 0.50
+
+    cal_rpm1: 7000
+    cal_w1: 40
+    cal_rpm2: 3500
+    cal_w2: 10
+
   - id: whatsminer_m30s
     match_model: "(?i)(whatsminer|m30s)"
     include_keys: ["^Fan\\s*\\d+\\s*Speed$","^Fan\\s*Speed\\s*(In|Out)?$"]

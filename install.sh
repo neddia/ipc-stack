@@ -143,6 +143,15 @@ if [ ! -f "$STORAGE_DIR/site-config.yml" ]; then
   cp "$STACK_DIR/storage/seed/site-config.yml" "$STORAGE_DIR/site-config.yml"
   log "seeded $STORAGE_DIR/site-config.yml"
 fi
+SEED_PROFILES_DIR="$STACK_DIR/seed/profiles"
+DEST_PROFILES_DIR="$STORAGE_DIR/profiles"
+if [ -d "$SEED_PROFILES_DIR" ]; then
+  mkdir -p "$DEST_PROFILES_DIR"
+  if [ -z "$(ls -A "$DEST_PROFILES_DIR" 2>/dev/null)" ]; then
+    cp -a "$SEED_PROFILES_DIR/." "$DEST_PROFILES_DIR/"
+    log "seeded $DEST_PROFILES_DIR"
+  fi
+fi
 if [[ "$SITE_AGENT_UID" =~ ^[0-9]+$ ]] && [[ "$SITE_AGENT_GID" =~ ^[0-9]+$ ]]; then
   chown -R "$SITE_AGENT_UID:$SITE_AGENT_GID" "$STORAGE_DIR"
   log "ensured $STORAGE_DIR owned by $SITE_AGENT_UID:$SITE_AGENT_GID"

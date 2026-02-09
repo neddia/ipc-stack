@@ -1,9 +1,5 @@
 version: 2
 
-site:
-  name: "edge"
-  segment_slug: "edge"
-
 site_agent:
   service_active: true
 
@@ -45,21 +41,20 @@ site_agent:
     ip_ranges: []
     targets: []
 
-  optimizer:
-    enabled: true
-    hz_min: 20
+  control:
+    hz_min: 35
     hz_max: 60
     hz_step: 1.0
-    optimize_every_s: 300
+    optimize_every_s: 60
     lookback_fit: "60m"
     slope_window_min: 45
-    fan95_cap: 0.92
+    fan95_cap: 0.70
     hotspot_frac_threshold: 0.05
     hotspot_max_up_hz: 1.0
-    ramp_hz: 2.0
+    ramp_hz: 4.0
     deadband_hz: 0.5
     min_dJ_frac: 0.005
-    bootstrap_hz: 45
+    bootstrap_hz: 50
     default_slope: -0.008
     slope_min: -0.05
     slope_max: -0.001
