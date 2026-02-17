@@ -18,10 +18,32 @@ site_agent:
     kw_field: kw
     defaults:
       base_hz: 60
+      hp: 10.0
+      fla: 6.6
+      eta_motor: 0.90
+      eta_vfd: 0.97
       motor_eff: 0.90
-      vfd_eff: 0.98
+      vfd_eff: 0.97
       idle_w: 30
+      power_factor: 0.90
+      vi_phase_multiplier: 1.7320508075688772
+      vi_scale: 1.0
       cal: { hz1: 30, kw1: 0.2, hz2: 60, kw2: 0.6 }
+      amp_cal:
+        i0_frac: 0.30
+        steady_hz_delta: 0.2
+        steady_min_s: 45
+        hz_min: 25
+        hz_max: 65
+        window_s: 86400
+        max_points: 2000
+        min_points: 40
+        min_hz_bins: 3
+        calibrate_every_s: 900
+        ema_alpha: 0.10
+        tau_max: 1.5
+        r2_min: 0.85
+    fans: {}
 
   miners:
     scan_enabled: true
@@ -46,18 +68,32 @@ site_agent:
     hz_max: 60
     hz_step: 1.0
     optimize_every_s: 60
+    group_concurrency: 4
     lookback_fit: "60m"
     slope_window_min: 45
-    fan95_cap: 0.70
+    rollup_stale_s: 600
+    effort_cap: 0.70
+    allowed_above_cap_pct_max: 0.10
     hotspot_frac_threshold: 0.05
     hotspot_max_up_hz: 1.0
     ramp_hz: 4.0
     deadband_hz: 0.5
     min_dJ_frac: 0.005
     bootstrap_hz: 50
-    default_slope: -0.008
     slope_min: -0.05
-    slope_max: -0.001
+    slope_max: 0.05
+    slope_min_points: 5
+    slope_distinct_hz_min: 3
+    slope_t_min: 2.5
+    allow_positive_slope: false
+    probe_enabled: true
+    probe_idle_s: 600
+    probe_idle_turns: 2
+    probe_delta_hz: 1.0
+    probe_margin_e95: 0.03
+    probe_margin_exceed_pct: 0.03
+    amp_require_cal_ok: true
+    amp_cal_max_age_s: 86400
 
   physics:
     gamma: 1.0
