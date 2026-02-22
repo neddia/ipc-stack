@@ -70,8 +70,22 @@ if [ -z "${IPC_PRIVATE_KEY_FILE:-}" ] && [ -s "$SECRETS_DIR/ipc_ed25519" ]; then
 fi
 
 cd "$STACK_DIR"
-docker compose -f compose.yml -f compose.dev.yml --env-file "$ENV_FILE" up -d --build
-docker compose -f compose.dev.yml --env-file "$ENV_FILE" up -d --build tailwind
+COMPOSE_ARGS=(-f compose.yml -f compose.dev.yml --env-file "$ENV_FILE")
+UP_ARGS=(-d)
+
+if [ "${BUILD_IMAGES:-0}" = "1" ]; then
+  UP_ARGS+=(--build)
+fi
+
+if [ "${ENABLE_SIM:-0}" = "1" ]; then
+  UP_ARGS+=(--profile sim)
+fi
+
+if [ "${ENABLE_TAILWIND:-0}" = "1" ]; then
+  UP_ARGS+=(--profile ui)
+fi
+
+docker compose "${COMPOSE_ARGS[@]}" up "${UP_ARGS[@]}"
 
 if [ ! -s "$SECRETS_DIR/influx.telegraf.token" ]; then
   IPC_SECRETS_DIR="$SECRETS_DIR" "$STACK_DIR/scripts/bootstrap-influx.sh" "$ENV_FILE" || true
