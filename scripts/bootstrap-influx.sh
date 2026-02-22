@@ -44,13 +44,21 @@ ADMIN_TOKEN="$(cat "$ADMIN_TOKEN_FILE")"
 
 log() { echo "[ipc-influx] $*"; }
 
+CURL_CONNECT_TIMEOUT_S="${INFLUX_CURL_CONNECT_TIMEOUT_S:-2}"
+CURL_MAX_TIME_S="${INFLUX_CURL_MAX_TIME_S:-10}"
+CURL_ARGS=(--connect-timeout "$CURL_CONNECT_TIMEOUT_S" --max-time "$CURL_MAX_TIME_S")
+
 wait_influx() {
   local tries=60
+  local total="$tries"
   while [ $tries -gt 0 ]; do
-    if curl -fsS "$INFLUX_URL/health" >/dev/null 2>&1; then
+    if curl "${CURL_ARGS[@]}" -fsS "$INFLUX_URL/health" >/dev/null 2>&1; then
       return 0
     fi
     tries=$((tries - 1))
+    if [ $((tries % 10)) -eq 0 ]; then
+      log "waiting for influx at $INFLUX_URL ($((total - tries))/${total})"
+    fi
     sleep 2
   done
   return 1
@@ -61,7 +69,8 @@ if ! wait_influx; then
   exit 1
 fi
 
-org_json="$(curl -fsS -H "Authorization: Token $ADMIN_TOKEN" \
+log "querying org $INFLUX_ORG"
+org_json="$(curl "${CURL_ARGS[@]}" -fsS -H "Authorization: Token $ADMIN_TOKEN" \
   "$INFLUX_URL/api/v2/orgs?org=$INFLUX_ORG")"
 
 ORG_ID="$(python3 -c 'import json,sys
@@ -76,7 +85,8 @@ if [ -z "$ORG_ID" ]; then
 fi
 
 
-bucket_json="$(curl -fsS -H "Authorization: Token $ADMIN_TOKEN" "$INFLUX_URL/api/v2/buckets?org=$INFLUX_ORG")"
+log "querying buckets in org $INFLUX_ORG"
+bucket_json="$(curl "${CURL_ARGS[@]}" -fsS -H "Authorization: Token $ADMIN_TOKEN" "$INFLUX_URL/api/v2/buckets?org=$INFLUX_ORG")"
 
 bucket_id() {
   local name="$1"
@@ -95,7 +105,7 @@ PY
 EDGE_BUCKET_ID="$(bucket_id "$EDGE_BUCKET" <<<"$bucket_json" || true)"
 if [ -z "$EDGE_BUCKET_ID" ]; then
   log "creating bucket $EDGE_BUCKET"
-  curl -fsS -H "Authorization: Token $ADMIN_TOKEN" \
+  curl "${CURL_ARGS[@]}" -fsS -H "Authorization: Token $ADMIN_TOKEN" \
     -H "Content-Type: application/json" \
     -X POST "$INFLUX_URL/api/v2/buckets" \
     -d "$(python3 - <<PY
@@ -103,14 +113,14 @@ import json
 print(json.dumps({"orgID": "$ORG_ID", "name": "$EDGE_BUCKET"}))
 PY
 )" >/dev/null
-  bucket_json="$(curl -fsS -H "Authorization: Token $ADMIN_TOKEN" "$INFLUX_URL/api/v2/buckets?org=$INFLUX_ORG")"
+  bucket_json="$(curl "${CURL_ARGS[@]}" -fsS -H "Authorization: Token $ADMIN_TOKEN" "$INFLUX_URL/api/v2/buckets?org=$INFLUX_ORG")"
   EDGE_BUCKET_ID="$(bucket_id "$EDGE_BUCKET" <<<"$bucket_json")"
 fi
 
 TELEGRAF_BUCKET_ID="$(bucket_id "$TELEGRAF_BUCKET" <<<"$bucket_json" || true)"
 if [ -z "$TELEGRAF_BUCKET_ID" ]; then
   log "creating bucket $TELEGRAF_BUCKET (retention $TELEGRAF_RETENTION)"
-  curl -fsS -H "Authorization: Token $ADMIN_TOKEN" \
+  curl "${CURL_ARGS[@]}" -fsS -H "Authorization: Token $ADMIN_TOKEN" \
     -H "Content-Type: application/json" \
     -X POST "$INFLUX_URL/api/v2/buckets" \
     -d "$(python3 - <<PY
@@ -131,7 +141,7 @@ if rules:
 print(json.dumps(payload))
 PY
 )" >/dev/null
-  bucket_json="$(curl -fsS -H "Authorization: Token $ADMIN_TOKEN" "$INFLUX_URL/api/v2/buckets?org=$INFLUX_ORG")"
+  bucket_json="$(curl "${CURL_ARGS[@]}" -fsS -H "Authorization: Token $ADMIN_TOKEN" "$INFLUX_URL/api/v2/buckets?org=$INFLUX_ORG")"
   TELEGRAF_BUCKET_ID="$(bucket_id "$TELEGRAF_BUCKET" <<<"$bucket_json")"
 fi
 
@@ -140,7 +150,7 @@ if [ -s "$TELEGRAF_TOKEN_FILE" ]; then
   chmod 644 "$TELEGRAF_TOKEN_FILE" || true
 else
   log "creating telegraf token (write to $EDGE_BUCKET + $TELEGRAF_BUCKET)"
-  token_json="$(curl -fsS -H "Authorization: Token $ADMIN_TOKEN" \
+  token_json="$(curl "${CURL_ARGS[@]}" -fsS -H "Authorization: Token $ADMIN_TOKEN" \
     -H "Content-Type: application/json" \
     -X POST "$INFLUX_URL/api/v2/authorizations" \
     -d "$(python3 - <<PY
