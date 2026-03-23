@@ -11,6 +11,16 @@ ENV_FILE="$STACK_DIR/.env"
 
 log() { echo "[ipc-update] $*"; }
 
+ensure_user_owned() {
+  local path="$1"
+  if [ -z "$path" ] || [ ! -e "$path" ]; then
+    return
+  fi
+  if [[ "${SITE_AGENT_UID:-}" =~ ^[0-9]+$ ]] && [[ "${SITE_AGENT_GID:-}" =~ ^[0-9]+$ ]]; then
+    chown -R "$SITE_AGENT_UID:$SITE_AGENT_GID" "$path" || true
+  fi
+}
+
 docker_login_ghcr() {
   local docker_cfg="${DOCKER_CONFIG:-/root/.docker}/config.json"
   if [ -f "$docker_cfg" ] && grep -q '"ghcr.io"' "$docker_cfg"; then
@@ -72,6 +82,15 @@ set -a
 source "$ENV_FILE"
 set +a
 
+if [ -z "${SITE_AGENT_UID:-}" ] || [ -z "${SITE_AGENT_GID:-}" ]; then
+  if [ -n "${SUDO_USER:-}" ] && id -u "$SUDO_USER" >/dev/null 2>&1; then
+    SITE_AGENT_UID="$(id -u "$SUDO_USER")"
+    SITE_AGENT_GID="$(id -g "$SUDO_USER")"
+  fi
+fi
+
+ensure_user_owned "$ENV_FILE"
+
 docker_login_ghcr
 
 cd "$STACK_DIR"
@@ -86,6 +105,8 @@ if [ ! -s "$STACK_DIR/.secrets/influx.telegraf.token" ]; then
 else
   log "telegraf token exists; skipping influx bootstrap"
 fi
+
+ensure_user_owned "$STACK_DIR/.secrets"
 
 "$STACK_DIR/scripts/check-health.sh" --env-file "$ENV_FILE"
 

@@ -22,6 +22,16 @@ persist_env_var() {
   fi
 }
 
+ensure_user_owned() {
+  local path="$1"
+  if [ -z "$path" ] || [ ! -e "$path" ]; then
+    return
+  fi
+  if [[ "${SITE_AGENT_UID:-}" =~ ^[0-9]+$ ]] && [[ "${SITE_AGENT_GID:-}" =~ ^[0-9]+$ ]]; then
+    chown -R "$SITE_AGENT_UID:$SITE_AGENT_GID" "$path" || true
+  fi
+}
+
 install_docker_stack() {
   if docker compose version >/dev/null 2>&1; then
     return
@@ -136,6 +146,8 @@ if [ -z "${SITE_AGENT_UID:-}" ] || [ -z "${SITE_AGENT_GID:-}" ]; then
   fi
 fi
 
+ensure_user_owned "$ENV_FILE"
+
 STORAGE_DIR="${IPC_STORAGE_DIR:-/opt/site-agent/storage}"
 REPO_LICENSE_KEY="$STACK_DIR/cloud.license.ed25519.pub"
 mkdir -p "$STORAGE_DIR"
@@ -165,12 +177,14 @@ if [ "${SKIP_TAILSCALE:-0}" != "1" ]; then
 fi
 
 IPC_SECRETS_DIR="${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}" "$STACK_DIR/scripts/gen-ipc-secrets.sh"
+ensure_user_owned "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}"
 
 if [ ! -s "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}/cloud.license.ed25519.pub" ] && [ -s "$REPO_LICENSE_KEY" ]; then
   cp "$REPO_LICENSE_KEY" "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}/cloud.license.ed25519.pub"
   chmod 0644 "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}/cloud.license.ed25519.pub" 2>/dev/null || true
   log "seeded cloud license verifier key to ${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}/cloud.license.ed25519.pub"
 fi
+ensure_user_owned "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}"
 
 if [ -z "${IPC_PUBLIC_KEY_FILE:-}" ] && [ -s "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}/ipc_ed25519.pub" ]; then
   IPC_PUBLIC_KEY_FILE="/run/secrets/ipc_ed25519.pub"

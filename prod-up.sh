@@ -17,6 +17,16 @@ persist_env_var() {
   fi
 }
 
+ensure_user_owned() {
+  local path="$1"
+  if [ -z "$path" ] || [ ! -e "$path" ]; then
+    return
+  fi
+  if [[ "${SITE_AGENT_UID:-}" =~ ^[0-9]+$ ]] && [[ "${SITE_AGENT_GID:-}" =~ ^[0-9]+$ ]]; then
+    chown -R "$SITE_AGENT_UID:$SITE_AGENT_GID" "$path" || true
+  fi
+}
+
 if [ ! -f "$ENV_FILE" ]; then
   if [ -f "$STACK_DIR/.env.example" ]; then
     cp "$STACK_DIR/.env.example" "$ENV_FILE"
@@ -31,6 +41,15 @@ set -a
 # shellcheck disable=SC1090
 source "$ENV_FILE"
 set +a
+
+if [ -z "${SITE_AGENT_UID:-}" ] || [ -z "${SITE_AGENT_GID:-}" ]; then
+  if [ -n "${SUDO_USER:-}" ] && id -u "$SUDO_USER" >/dev/null 2>&1; then
+    SITE_AGENT_UID="$(id -u "$SUDO_USER")"
+    SITE_AGENT_GID="$(id -g "$SUDO_USER")"
+  fi
+fi
+
+ensure_user_owned "$ENV_FILE"
 
 export ENV_FILE
 
@@ -50,12 +69,14 @@ REPO_LICENSE_KEY="$STACK_DIR/cloud.license.ed25519.pub"
 mkdir -p "$SECRETS_DIR"
 
 IPC_SECRETS_DIR="$SECRETS_DIR" "$STACK_DIR/scripts/gen-ipc-secrets.sh"
+ensure_user_owned "$SECRETS_DIR"
 
 if [ ! -s "$SECRETS_DIR/cloud.license.ed25519.pub" ] && [ -s "$REPO_LICENSE_KEY" ]; then
   cp "$REPO_LICENSE_KEY" "$SECRETS_DIR/cloud.license.ed25519.pub"
   chmod 0644 "$SECRETS_DIR/cloud.license.ed25519.pub" 2>/dev/null || true
   log "seeded cloud license verifier key to $SECRETS_DIR/cloud.license.ed25519.pub"
 fi
+ensure_user_owned "$SECRETS_DIR"
 
 if [ -z "${IPC_PUBLIC_KEY_FILE:-}" ] && [ -s "$SECRETS_DIR/ipc_ed25519.pub" ]; then
   IPC_PUBLIC_KEY_FILE="/run/secrets/ipc_ed25519.pub"
