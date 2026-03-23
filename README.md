@@ -70,19 +70,22 @@ SETPOINT_DIR=/home/you/setpoint ./dev-up.sh
 
 For dev, secrets default to `../ipc-secrets` (outside the repo) via `.env.dev`.
 
-By default, `dev-up.sh` now starts a minimal stack (no sim container, no Tailwind
-watcher, no forced image rebuild). Optional toggles:
+By default, `dev-up.sh` starts the Tailwind watcher so template class changes are
+compiled into `site-agent/app/static/tailwind.css`. Optional toggles:
 
 ```bash
 # include sim container(s)
 ENABLE_SIM=1 ./dev-up.sh .env.dev
 
-# include tailwind watcher
-ENABLE_TAILWIND=1 ./dev-up.sh .env.dev
+# disable tailwind watcher
+ENABLE_TAILWIND=0 ./dev-up.sh .env.dev
 
 # force image rebuild
 BUILD_IMAGES=1 ./dev-up.sh .env.dev
 ```
+
+With `ENABLE_SIM=1`, the dev override brings up both the multi-unit Modbus VFD
+simulator and the fake cgminer fleet used for dashboard/optimizer testing.
 
 ## Notes
 

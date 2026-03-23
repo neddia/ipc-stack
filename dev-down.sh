@@ -12,4 +12,4 @@ else
 fi
 
 cd "$STACK_DIR"
-docker compose -f compose.yml -f compose.dev.yml --env-file "$ENV_FILE" down
+docker compose -f compose.yml -f compose.dev.yml --env-file "$ENV_FILE" --profile sim --profile ui down --remove-orphans

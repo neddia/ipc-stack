@@ -1,11 +1,39 @@
 services:
   modbus-sim:
     profiles: ["sim"]
-    image: local/site-agent:dev
+    image: local/gatewayd:dev
     build:
       context: ${SETPOINT_DIR:-../setpoint}
-      dockerfile: docker/site-agent.Dockerfile
+      dockerfile: docker/gatewayd.Dockerfile
+    volumes:
+      - ${SETPOINT_DIR:-../setpoint}/tools:/app/tools
     command: ["python", "/app/tools/sims/modbus_sim.py"]
+    restart: unless-stopped
+
+  fake-miner-fleet:
+    profiles: ["sim"]
+    image: local/gatewayd:dev
+    build:
+      context: ${SETPOINT_DIR:-../setpoint}
+      dockerfile: docker/gatewayd.Dockerfile
+    depends_on:
+      gatewayd:
+        condition: service_started
+        restart: true
+      site-agent:
+        condition: service_started
+        restart: true
+    network_mode: "service:site-agent"
+    environment:
+      SITE_CONFIG_PATH: /app/storage/site-config.sim.yml
+      GATEWAYD_BASE_URL: http://gatewayd:8080
+      SITE_AGENT_BASE_URL: http://127.0.0.1:8000
+      GATEWAYD_TOKEN: devtoken
+      SIM_MINER_PORT: 4028
+    volumes:
+      - ${SETPOINT_DIR:-../setpoint}/tools:/app/tools
+      - ${IPC_STORAGE_DIR:-../setpoint/storage}:/app/storage
+    command: ["python", "/app/tools/sims/fake_cgminer_fleet.py"]
     restart: unless-stopped
 
   site-agent:
@@ -15,6 +43,7 @@ services:
       dockerfile: docker/site-agent.Dockerfile
     environment:
       SITE_CONFIG_PATH: /app/storage/site-config.sim.yml
+      PROFILES_DIR: /app/storage/profiles
     volumes:
       - ${SETPOINT_DIR:-../setpoint}/site-agent:/app/site-agent
       - ${SETPOINT_DIR:-../setpoint}/ticlib:/app/ticlib

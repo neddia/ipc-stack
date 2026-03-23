@@ -31,6 +31,7 @@ services:
       INFLUX_ORG: ${INFLUX_ORG:-edge-org}
       INFLUX_BUCKET: ${INFLUX_BUCKET:-edge-site}
       INFLUX_TOKEN_FILE: /run/secrets/influx.admin.token
+      PROFILES_DIR: /app/storage/profiles
     depends_on:
       - influxdb
     volumes:

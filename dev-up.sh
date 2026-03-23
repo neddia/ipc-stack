@@ -52,9 +52,16 @@ if [ -z "${TAILSCALE_IP:-}" ]; then
 fi
 
 SECRETS_DIR="${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}"
+REPO_LICENSE_KEY="$STACK_DIR/cloud.license.ed25519.pub"
 mkdir -p "$SECRETS_DIR"
 
 IPC_SECRETS_DIR="$SECRETS_DIR" "$STACK_DIR/scripts/gen-ipc-secrets.sh"
+
+if [ ! -s "$SECRETS_DIR/cloud.license.ed25519.pub" ] && [ -s "$REPO_LICENSE_KEY" ]; then
+  cp "$REPO_LICENSE_KEY" "$SECRETS_DIR/cloud.license.ed25519.pub"
+  chmod 0644 "$SECRETS_DIR/cloud.license.ed25519.pub" 2>/dev/null || true
+  echo "[ipc-dev] seeded cloud license verifier key to $SECRETS_DIR/cloud.license.ed25519.pub"
+fi
 
 if [ -z "${IPC_PUBLIC_KEY_FILE:-}" ] && [ -s "$SECRETS_DIR/ipc_ed25519.pub" ]; then
   IPC_PUBLIC_KEY_FILE="/run/secrets/ipc_ed25519.pub"
@@ -68,24 +75,39 @@ if [ -z "${IPC_PRIVATE_KEY_FILE:-}" ] && [ -s "$SECRETS_DIR/ipc_ed25519" ]; then
   export IPC_PRIVATE_KEY_FILE
   echo "[ipc-dev] set IPC_PRIVATE_KEY_FILE=$IPC_PRIVATE_KEY_FILE"
 fi
+if [ -z "${CLOUD_LICENSE_SIGNING_PUBLIC_KEY_FILE:-}" ] && [ -s "$SECRETS_DIR/cloud.license.ed25519.pub" ]; then
+  CLOUD_LICENSE_SIGNING_PUBLIC_KEY_FILE="/run/secrets/cloud.license.ed25519.pub"
+  persist_env_var "$ENV_FILE" "CLOUD_LICENSE_SIGNING_PUBLIC_KEY_FILE" "$CLOUD_LICENSE_SIGNING_PUBLIC_KEY_FILE"
+  export CLOUD_LICENSE_SIGNING_PUBLIC_KEY_FILE
+  echo "[ipc-dev] set CLOUD_LICENSE_SIGNING_PUBLIC_KEY_FILE=$CLOUD_LICENSE_SIGNING_PUBLIC_KEY_FILE"
+fi
+if [ "${OPTIMIZER_LICENSE_POLICY:-off}" = "required" ] && [ -z "${CLOUD_LICENSE_SIGNING_PUBLIC_KEY:-}" ] && [ ! -s "$SECRETS_DIR/cloud.license.ed25519.pub" ]; then
+  echo "[ipc-dev] warning: missing optimizer trust key at $SECRETS_DIR/cloud.license.ed25519.pub"
+fi
 
 cd "$STACK_DIR"
-COMPOSE_ARGS=(-f compose.yml -f compose.dev.yml --env-file "$ENV_FILE")
+COMPOSE_BASE_ARGS=(-f compose.yml -f compose.dev.yml --env-file "$ENV_FILE")
 UP_ARGS=(-d)
 
 if [ "${BUILD_IMAGES:-0}" = "1" ]; then
   UP_ARGS+=(--build)
 fi
 
+compose_up() {
+  docker compose "${COMPOSE_BASE_ARGS[@]}" "$@" up "${UP_ARGS[@]}"
+}
+
+if [ "${ENABLE_TAILWIND:-1}" = "1" ]; then
+  compose_up --profile ui
+else
+  compose_up
+fi
+
 if [ "${ENABLE_SIM:-0}" = "1" ]; then
-  UP_ARGS+=(--profile sim)
+  # Start the profile-gated sim services after site-agent exists so the
+  # fake miner can bind to service:site-agent without racing container setup.
+  compose_up --profile sim
 fi
-
-if [ "${ENABLE_TAILWIND:-0}" = "1" ]; then
-  UP_ARGS+=(--profile ui)
-fi
-
-docker compose "${COMPOSE_ARGS[@]}" up "${UP_ARGS[@]}"
 
 if [ ! -s "$SECRETS_DIR/influx.telegraf.token" ]; then
   IPC_SECRETS_DIR="$SECRETS_DIR" "$STACK_DIR/scripts/bootstrap-influx.sh" "$ENV_FILE" || true

@@ -138,6 +138,7 @@ if [ -z "${SITE_AGENT_UID:-}" ] || [ -z "${SITE_AGENT_GID:-}" ]; then
 fi
 
 STORAGE_DIR="${IPC_STORAGE_DIR:-/opt/site-agent/storage}"
+REPO_LICENSE_KEY="$STACK_DIR/cloud.license.ed25519.pub"
 mkdir -p "$STORAGE_DIR"
 if [ ! -f "$STORAGE_DIR/site-config.yml" ]; then
   cp "$STACK_DIR/storage/seed/site-config.yml" "$STORAGE_DIR/site-config.yml"
@@ -179,6 +180,12 @@ fi
 
 IPC_SECRETS_DIR="${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}" "$STACK_DIR/scripts/gen-ipc-secrets.sh"
 
+if [ ! -s "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}/cloud.license.ed25519.pub" ] && [ -s "$REPO_LICENSE_KEY" ]; then
+  cp "$REPO_LICENSE_KEY" "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}/cloud.license.ed25519.pub"
+  chmod 0644 "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}/cloud.license.ed25519.pub" 2>/dev/null || true
+  log "seeded cloud license verifier key to ${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}/cloud.license.ed25519.pub"
+fi
+
 if [ -z "${IPC_PUBLIC_KEY_FILE:-}" ] && [ -s "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}/ipc_ed25519.pub" ]; then
   IPC_PUBLIC_KEY_FILE="/run/secrets/ipc_ed25519.pub"
   persist_env_var "$ENV_FILE" "IPC_PUBLIC_KEY_FILE" "$IPC_PUBLIC_KEY_FILE"
@@ -190,6 +197,16 @@ if [ -z "${IPC_PRIVATE_KEY_FILE:-}" ] && [ -s "${IPC_SECRETS_DIR:-$STACK_DIR/.se
   persist_env_var "$ENV_FILE" "IPC_PRIVATE_KEY_FILE" "$IPC_PRIVATE_KEY_FILE"
   export IPC_PRIVATE_KEY_FILE
   log "set IPC_PRIVATE_KEY_FILE=$IPC_PRIVATE_KEY_FILE"
+fi
+if [ -z "${CLOUD_LICENSE_SIGNING_PUBLIC_KEY_FILE:-}" ] && [ -s "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}/cloud.license.ed25519.pub" ]; then
+  CLOUD_LICENSE_SIGNING_PUBLIC_KEY_FILE="/run/secrets/cloud.license.ed25519.pub"
+  persist_env_var "$ENV_FILE" "CLOUD_LICENSE_SIGNING_PUBLIC_KEY_FILE" "$CLOUD_LICENSE_SIGNING_PUBLIC_KEY_FILE"
+  export CLOUD_LICENSE_SIGNING_PUBLIC_KEY_FILE
+  log "set CLOUD_LICENSE_SIGNING_PUBLIC_KEY_FILE=$CLOUD_LICENSE_SIGNING_PUBLIC_KEY_FILE"
+fi
+if [ "${OPTIMIZER_LICENSE_POLICY:-required}" = "required" ] && [ -z "${CLOUD_LICENSE_SIGNING_PUBLIC_KEY:-}" ] && [ ! -s "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}/cloud.license.ed25519.pub" ]; then
+  echo "Missing optimizer trust key. Place cloud.license.ed25519.pub in ${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}." >&2
+  exit 1
 fi
 
 docker_login_ghcr

@@ -46,9 +46,16 @@ if [ -z "${TAILSCALE_IP:-}" ]; then
 fi
 
 SECRETS_DIR="${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}"
+REPO_LICENSE_KEY="$STACK_DIR/cloud.license.ed25519.pub"
 mkdir -p "$SECRETS_DIR"
 
 IPC_SECRETS_DIR="$SECRETS_DIR" "$STACK_DIR/scripts/gen-ipc-secrets.sh"
+
+if [ ! -s "$SECRETS_DIR/cloud.license.ed25519.pub" ] && [ -s "$REPO_LICENSE_KEY" ]; then
+  cp "$REPO_LICENSE_KEY" "$SECRETS_DIR/cloud.license.ed25519.pub"
+  chmod 0644 "$SECRETS_DIR/cloud.license.ed25519.pub" 2>/dev/null || true
+  log "seeded cloud license verifier key to $SECRETS_DIR/cloud.license.ed25519.pub"
+fi
 
 if [ -z "${IPC_PUBLIC_KEY_FILE:-}" ] && [ -s "$SECRETS_DIR/ipc_ed25519.pub" ]; then
   IPC_PUBLIC_KEY_FILE="/run/secrets/ipc_ed25519.pub"
@@ -61,6 +68,16 @@ if [ -z "${IPC_PRIVATE_KEY_FILE:-}" ] && [ -s "$SECRETS_DIR/ipc_ed25519" ]; then
   persist_env_var "$ENV_FILE" "IPC_PRIVATE_KEY_FILE" "$IPC_PRIVATE_KEY_FILE"
   export IPC_PRIVATE_KEY_FILE
   log "set IPC_PRIVATE_KEY_FILE=$IPC_PRIVATE_KEY_FILE"
+fi
+if [ -z "${CLOUD_LICENSE_SIGNING_PUBLIC_KEY_FILE:-}" ] && [ -s "$SECRETS_DIR/cloud.license.ed25519.pub" ]; then
+  CLOUD_LICENSE_SIGNING_PUBLIC_KEY_FILE="/run/secrets/cloud.license.ed25519.pub"
+  persist_env_var "$ENV_FILE" "CLOUD_LICENSE_SIGNING_PUBLIC_KEY_FILE" "$CLOUD_LICENSE_SIGNING_PUBLIC_KEY_FILE"
+  export CLOUD_LICENSE_SIGNING_PUBLIC_KEY_FILE
+  log "set CLOUD_LICENSE_SIGNING_PUBLIC_KEY_FILE=$CLOUD_LICENSE_SIGNING_PUBLIC_KEY_FILE"
+fi
+if [ "${OPTIMIZER_LICENSE_POLICY:-required}" = "required" ] && [ -z "${CLOUD_LICENSE_SIGNING_PUBLIC_KEY:-}" ] && [ ! -s "$SECRETS_DIR/cloud.license.ed25519.pub" ]; then
+  echo "Missing optimizer trust key. Place cloud.license.ed25519.pub in $SECRETS_DIR." >&2
+  exit 1
 fi
 
 cd "$STACK_DIR"

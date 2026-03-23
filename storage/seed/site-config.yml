@@ -13,7 +13,7 @@ site_agent:
     poll_s: 5
 
   vfd_power_model:
-    measurement: vfd_telemetry
+    measurement: vfd_raw
     hz_field: out_hz
     kw_field: kw
     defaults:
@@ -75,23 +75,9 @@ site_agent:
     rollup_stale_s: 600
     effort_cap: 0.70
     allowed_above_cap_pct_max: 0.10
-    hotspot_frac_threshold: 0.05
-    hotspot_max_up_hz: 1.0
     ramp_hz: 4.0
     deadband_hz: 0.5
     min_dJ_frac: 0.005
-    slope_min: -0.05
-    slope_max: 0.05
-    slope_min_points: 5
-    slope_distinct_hz_min: 3
-    slope_t_min: 2.5
-    allow_positive_slope: false
-    probe_enabled: true
-    probe_idle_s: 600
-    probe_idle_turns: 2
-    probe_delta_hz: 1.0
-    probe_margin_e95: 0.03
-    probe_margin_exceed_pct: 0.03
     amp_require_cal_ok: true
     amp_cal_max_age_s: 86400
 
