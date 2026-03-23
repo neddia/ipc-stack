@@ -99,26 +99,45 @@ CONF
   fi
 }
 
-seed_profiles() {
-  local root_dir seed_dir storage_dir dest_dir
+install_host_state_timer() {
+  local root_dir script_path service_path timer_path
   root_dir="$(cd "$(dirname "$0")/.." && pwd)"
-  seed_dir="${root_dir}/seed/profiles"
-  storage_dir="${IPC_STORAGE_DIR:-/opt/site-agent/storage}"
-  dest_dir="${storage_dir}/profiles"
+  script_path="${root_dir}/scripts/write-host-state.sh"
+  service_path="/etc/systemd/system/ipc-host-state.service"
+  timer_path="/etc/systemd/system/ipc-host-state.timer"
 
-  if [ ! -d "${seed_dir}" ]; then
-    log "no profile seed dir at ${seed_dir}; skipping"
+  if [ ! -x "$script_path" ]; then
+    log "host state writer missing at $script_path; skipping"
     return
   fi
 
-  mkdir -p "${dest_dir}"
-  if [ -n "$(ls -A "${dest_dir}" 2>/dev/null)" ]; then
-    log "profiles already present at ${dest_dir}; leaving unchanged"
-    return
-  fi
+  log "installing host state writer timer"
+  cat >"$service_path" <<EOF
+[Unit]
+Description=Write IPC host state for site-agent alerts
 
-  log "seeding profiles to ${dest_dir}"
-  cp -a "${seed_dir}/." "${dest_dir}/"
+[Service]
+Type=oneshot
+Environment=IPC_STORAGE_DIR=${IPC_STORAGE_DIR:-/opt/site-agent/storage}
+ExecStart=${script_path}
+EOF
+
+  cat >"$timer_path" <<'EOF'
+[Unit]
+Description=Refresh IPC host state
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=ipc-host-state.service
+
+[Install]
+WantedBy=timers.target
+EOF
+
+  systemctl daemon-reload
+  systemctl enable --now ipc-host-state.timer || true
+  systemctl start ipc-host-state.service || true
 }
 
 disable_sleep
@@ -127,7 +146,7 @@ limit_journal
 security_updates
 enable_tailscale
 docker_log_limits
-seed_profiles
+install_host_state_timer
 
 if [ -x /opt/ipc-stack/scripts/enable-mdns.sh ]; then
   /opt/ipc-stack/scripts/enable-mdns.sh || true

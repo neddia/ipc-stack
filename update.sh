@@ -76,6 +76,7 @@ docker_login_ghcr
 
 cd "$STACK_DIR"
 docker compose pull
+"$STACK_DIR/scripts/sync-defaults.sh" --env-file "$ENV_FILE"
 
 docker compose up -d
 
@@ -85,5 +86,7 @@ if [ ! -s "$STACK_DIR/.secrets/influx.telegraf.token" ]; then
 else
   log "telegraf token exists; skipping influx bootstrap"
 fi
+
+"$STACK_DIR/scripts/check-health.sh" --env-file "$ENV_FILE"
 
 log "update complete"

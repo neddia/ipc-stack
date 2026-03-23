@@ -1,17 +1,17 @@
 # IPC Stack (public)
 
 Minimal, public bootstrap repo for IPC installs. It pulls a prebuilt
-`site-agent` image from GHCR and runs local Influx + site-agent. State is
+`site-agent` image from GHCR and runs local Influx + gatewayd + site-agent. State is
 stored on the host so rollbacks are safe.
 
 ## Layout
 
-- `compose.yml` — Influx + site-agent (image-based).
+- `compose.yml` — Influx + gatewayd + site-agent (image-based).
 - `.env.example` — deployment settings (copy to `.env`).
-- `install.sh` — one-time install + seed storage.
+- `install.sh` — one-time install + seed storage from the pinned image.
 - `update.sh` — pull a new image tag and restart.
+- `scripts/sync-defaults.sh` — extract bundled config/profile defaults from the `site-agent` image into host storage.
 - `scripts/` — helpers (secrets, hardening, SSH lockdown).
-- `storage/seed/site-config.yml` — example config template.
 
 ## Quick start (new IPC)
 
@@ -92,3 +92,4 @@ simulator and the fake cgminer fleet used for dashboard/optimizer testing.
 - Secrets are created in `./.secrets/` (gitignored).
 - Storage lives at `/opt/site-agent/storage` by default (bind mount).
 - The image tag is controlled by `SITE_AGENT_VERSION` in `.env`.
+- `install.sh` and `update.sh` refresh `site-config.example.yml` and `profiles.defaults/` from the pinned `site-agent` image, and only initialize runtime `site-config.yml` / `profiles/` when missing.

@@ -1,4 +1,4 @@
 .env
 .secrets/
-storage/*
-!storage/seed/
+seed/
+storage/

@@ -87,3 +87,5 @@ if [ ! -s "$SECRETS_DIR/influx.telegraf.token" ]; then
   log "bootstrapping influx token/buckets"
   IPC_SECRETS_DIR="$SECRETS_DIR" "$STACK_DIR/scripts/bootstrap-influx.sh" "$ENV_FILE"
 fi
+
+"$STACK_DIR/scripts/check-health.sh" --env-file "$ENV_FILE"

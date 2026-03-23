@@ -58,17 +58,16 @@ tailscale_up() {
   if tailscale status >/dev/null 2>&1; then
     return
   fi
-  if [ -z "${TS_AUTHKEY:-}" ]; then
-    log "tailscale up skipped (set TS_AUTHKEY to auto-enroll)"
-    return
-  fi
   local tags="${TS_TAGS:-tag:ipc}"
   local hostname="${TS_HOSTNAME:-}"
-  local args=(--authkey "$TS_AUTHKEY" --ssh --advertise-tags "$tags")
+  local args=(--ssh --advertise-tags "$tags")
+  if [ -n "${TS_AUTHKEY:-}" ]; then
+    args=(--authkey "$TS_AUTHKEY" "${args[@]}")
+  fi
   if [ -n "$hostname" ]; then
     args+=(--hostname "$hostname")
   fi
-  log "running tailscale up --ssh"
+  log "running tailscale up --ssh --advertise-tags=$tags"
   tailscale up "${args[@]}"
 }
 
@@ -140,19 +139,6 @@ fi
 STORAGE_DIR="${IPC_STORAGE_DIR:-/opt/site-agent/storage}"
 REPO_LICENSE_KEY="$STACK_DIR/cloud.license.ed25519.pub"
 mkdir -p "$STORAGE_DIR"
-if [ ! -f "$STORAGE_DIR/site-config.yml" ]; then
-  cp "$STACK_DIR/storage/seed/site-config.yml" "$STORAGE_DIR/site-config.yml"
-  log "seeded $STORAGE_DIR/site-config.yml"
-fi
-SEED_PROFILES_DIR="$STACK_DIR/seed/profiles"
-DEST_PROFILES_DIR="$STORAGE_DIR/profiles"
-if [ -d "$SEED_PROFILES_DIR" ]; then
-  mkdir -p "$DEST_PROFILES_DIR"
-  if [ -z "$(ls -A "$DEST_PROFILES_DIR" 2>/dev/null)" ]; then
-    cp -a "$SEED_PROFILES_DIR/." "$DEST_PROFILES_DIR/"
-    log "seeded $DEST_PROFILES_DIR"
-  fi
-fi
 if [[ "$SITE_AGENT_UID" =~ ^[0-9]+$ ]] && [[ "$SITE_AGENT_GID" =~ ^[0-9]+$ ]]; then
   chown -R "$SITE_AGENT_UID:$SITE_AGENT_GID" "$STORAGE_DIR"
   log "ensured $STORAGE_DIR owned by $SITE_AGENT_UID:$SITE_AGENT_GID"
@@ -214,11 +200,13 @@ docker_login_ghcr
 log "starting IPC stack"
 cd "$STACK_DIR"
 docker compose pull
+"$STACK_DIR/scripts/sync-defaults.sh" --env-file "$ENV_FILE"
 
 docker compose up -d
 
 log "bootstrapping influx buckets/tokens"
 "$STACK_DIR/scripts/bootstrap-influx.sh" || true
+"$STACK_DIR/scripts/check-health.sh" --env-file "$ENV_FILE"
 
 if [ "${TAILSCALE_SSH_ONLY:-0}" = "1" ]; then
   "$STACK_DIR/scripts/lockdown-ssh.sh" || true
@@ -226,5 +214,5 @@ fi
 
 log "install complete"
 if [ -z "${TS_AUTHKEY:-}" ] && [ "${SKIP_TAILSCALE:-0}" != "1" ]; then
-  log "next: run 'tailscale up --ssh' and tag the node as ipc"
+  log "if Tailscale prompted above, complete the browser login to finish tailnet enrollment"
 fi
