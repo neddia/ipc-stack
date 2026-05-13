@@ -107,6 +107,7 @@ if [ "${ENABLE_SIM:-0}" = "1" ]; then
   # Start the profile-gated sim services after site-agent exists so the
   # fake miner can bind to service:site-agent without racing container setup.
   compose_up --profile sim
+  nohup "$STACK_DIR/scripts/watch-sim-deps.sh" "$ENV_FILE" >/tmp/ipc-stack-watch-sim-deps.log 2>&1 &
 fi
 
 if [ ! -s "$SECRETS_DIR/influx.telegraf.token" ]; then

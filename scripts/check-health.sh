@@ -44,7 +44,29 @@ if [ ! -f "$ENV_FILE" ]; then
   exit 1
 fi
 
+set -a
+# shellcheck disable=SC1090
+source "$ENV_FILE"
+set +a
+
 log() { echo "[ipc-health] $*"; }
+
+health_host() {
+  local bind_host="$1"
+  if [ -z "$bind_host" ] || [ "$bind_host" = "0.0.0.0" ]; then
+    echo "127.0.0.1"
+  else
+    echo "$bind_host"
+  fi
+}
+
+INFLUX_HEALTH_HOST="$(health_host "${INFLUX_BIND_HOST:-127.0.0.1}")"
+GATEWAYD_HEALTH_HOST="$(health_host "${GATEWAYD_BIND_HOST:-127.0.0.1}")"
+SITE_AGENT_HEALTH_HOST="$(health_host "${SITE_AGENT_BIND_HOST:-127.0.0.1}")"
+INFLUX_HEALTH_URL="${INFLUX_HEALTH_URL:-http://${INFLUX_HEALTH_HOST}:${INFLUX_HOST_PORT:-8086}/health}"
+GATEWAYD_HEALTH_URL="${GATEWAYD_HEALTH_URL:-http://${GATEWAYD_HEALTH_HOST}:${GATEWAYD_HOST_PORT:-8080}/healthz}"
+GATEWAYD_READY_URL="${GATEWAYD_READY_URL:-http://${GATEWAYD_HEALTH_HOST}:${GATEWAYD_HOST_PORT:-8080}/readyz}"
+SITE_AGENT_HEALTH_URL="${SITE_AGENT_HEALTH_URL:-http://${SITE_AGENT_HEALTH_HOST}:${SITE_AGENT_HOST_PORT:-8000}/ui/settings/status}"
 
 compose_services_running() {
   local running
@@ -81,19 +103,19 @@ while [ "$SECONDS" -lt "$deadline" ]; do
     sleep 2
     continue
   fi
-  if ! last_err="$(check_endpoint influx http://127.0.0.1:8086/health '"status":"pass"')"; then
+  if ! last_err="$(check_endpoint influx "$INFLUX_HEALTH_URL" '"status":"pass"')"; then
     sleep 2
     continue
   fi
-  if ! last_err="$(check_endpoint gatewayd_health http://127.0.0.1:8080/healthz '"ok"[[:space:]]*:[[:space:]]*true')"; then
+  if ! last_err="$(check_endpoint gatewayd_health "$GATEWAYD_HEALTH_URL" '"ok"[[:space:]]*:[[:space:]]*true')"; then
     sleep 2
     continue
   fi
-  if ! last_err="$(check_endpoint gatewayd_ready http://127.0.0.1:8080/readyz '"ok"[[:space:]]*:[[:space:]]*true')"; then
+  if ! last_err="$(check_endpoint gatewayd_ready "$GATEWAYD_READY_URL" '"ok"[[:space:]]*:[[:space:]]*true')"; then
     sleep 2
     continue
   fi
-  if ! last_err="$(check_endpoint site_agent http://127.0.0.1:8000/ui/settings/status '"ok"[[:space:]]*:[[:space:]]*true')"; then
+  if ! last_err="$(check_endpoint site_agent "$SITE_AGENT_HEALTH_URL" '"ok"[[:space:]]*:[[:space:]]*true')"; then
     sleep 2
     continue
   fi

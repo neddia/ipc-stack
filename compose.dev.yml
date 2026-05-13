@@ -47,6 +47,12 @@ services:
     volumes:
       - ${SETPOINT_DIR:-../setpoint}/site-agent:/app/site-agent
       - ${SETPOINT_DIR:-../setpoint}/ticlib:/app/ticlib
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "cloud-dev-host:host-gateway"
+    networks:
+      - default
+      - cloud_core
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
   tailwind:
@@ -84,3 +90,8 @@ services:
       - ${SETPOINT_DIR:-../setpoint}/ticlib:/app/ticlib
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+networks:
+  cloud_core:
+    external: true
+    name: toops-cloud_cloud_core

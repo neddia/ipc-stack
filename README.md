@@ -35,6 +35,27 @@ If you want to lock SSH to Tailscale only:
 sudo ./scripts/lockdown-ssh.sh
 ```
 
+## Host port binding
+
+By default, the site-agent UI binds to `0.0.0.0:8000` so operators can reach it
+on the LAN. InfluxDB and gatewayd bind to `127.0.0.1` only.
+
+For intentional debugging or tighter deployment, override bind hosts in `.env`:
+
+```bash
+# Default: LAN/Tailnet-accessible local UI
+SITE_AGENT_BIND_HOST=0.0.0.0
+
+# Tighter: Tailscale-only local UI
+SITE_AGENT_BIND_HOST=<tailscale-ip>
+
+# LAN-expose gatewayd temporarily
+GATEWAYD_BIND_HOST=0.0.0.0
+```
+
+Prefer leaving InfluxDB and gatewayd on `127.0.0.1`; expose them only briefly
+for debugging.
+
 ## Update / rollback
 
 ```bash
