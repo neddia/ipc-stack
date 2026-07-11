@@ -1,4 +1,20 @@
 services:
+  # Own the shared loopback/network namespace used by site-agent and the
+  # simulated miner fleet. Keeping ownership outside site-agent prevents a
+  # site-agent restart from stranding the simulator in the old namespace.
+  sim-netns:
+    image: alpine:3.20
+    command: ["sleep", "infinity"]
+    restart: unless-stopped
+    ports:
+      - "${SITE_AGENT_BIND_HOST:-0.0.0.0}:${SITE_AGENT_HOST_PORT:-8000}:8000"
+    networks:
+      - default
+      - cloud_core
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "cloud-dev-host:host-gateway"
+
   modbus-sim:
     profiles: ["sim"]
     image: local/gatewayd:dev
@@ -17,13 +33,13 @@ services:
       context: ${SETPOINT_DIR:-../setpoint}
       dockerfile: docker/gatewayd.Dockerfile
     depends_on:
+      sim-netns:
+        condition: service_started
       gatewayd:
         condition: service_started
-        restart: true
       site-agent:
         condition: service_started
-        restart: true
-    network_mode: "service:site-agent"
+    network_mode: "service:sim-netns"
     environment:
       SITE_CONFIG_PATH: /app/storage/site-config.sim.yml
       GATEWAYD_BASE_URL: http://gatewayd:8080
@@ -47,12 +63,14 @@ services:
     volumes:
       - ${SETPOINT_DIR:-../setpoint}/site-agent:/app/site-agent
       - ${SETPOINT_DIR:-../setpoint}/ticlib:/app/ticlib
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-      - "cloud-dev-host:host-gateway"
-    networks:
-      - default
-      - cloud_core
+    depends_on:
+      influxdb:
+        condition: service_started
+      sim-netns:
+        condition: service_started
+    network_mode: "service:sim-netns"
+    ports: !reset []
+    extra_hosts: !reset []
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
   tailwind:
