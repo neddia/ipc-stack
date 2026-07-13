@@ -11,6 +11,7 @@ Usage: check-health.sh [--env-file PATH] [--timeout SECONDS]
 
 Checks that the IPC stack is running and that the key HTTP endpoints respond:
 - InfluxDB     http://127.0.0.1:8086/health
+- Telegraf     a cpu-total point written within the last 2 minutes
 - gatewayd     http://127.0.0.1:8080/healthz
 - gatewayd     http://127.0.0.1:8080/readyz
 - site-agent   http://127.0.0.1:8000/ui/settings/status
@@ -64,9 +65,14 @@ INFLUX_HEALTH_HOST="$(health_host "${INFLUX_BIND_HOST:-127.0.0.1}")"
 GATEWAYD_HEALTH_HOST="$(health_host "${GATEWAYD_BIND_HOST:-127.0.0.1}")"
 SITE_AGENT_HEALTH_HOST="$(health_host "${SITE_AGENT_BIND_HOST:-127.0.0.1}")"
 INFLUX_HEALTH_URL="${INFLUX_HEALTH_URL:-http://${INFLUX_HEALTH_HOST}:${INFLUX_HOST_PORT:-8086}/health}"
+INFLUX_API_URL="${INFLUX_API_URL:-${INFLUX_HEALTH_URL%/health}}"
 GATEWAYD_HEALTH_URL="${GATEWAYD_HEALTH_URL:-http://${GATEWAYD_HEALTH_HOST}:${GATEWAYD_HOST_PORT:-8080}/healthz}"
 GATEWAYD_READY_URL="${GATEWAYD_READY_URL:-http://${GATEWAYD_HEALTH_HOST}:${GATEWAYD_HOST_PORT:-8080}/readyz}"
 SITE_AGENT_HEALTH_URL="${SITE_AGENT_HEALTH_URL:-http://${SITE_AGENT_HEALTH_HOST}:${SITE_AGENT_HOST_PORT:-8000}/ui/settings/status}"
+SECRETS_DIR="${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}"
+INFLUX_ADMIN_TOKEN_FILE="$SECRETS_DIR/influx.admin.token"
+INFLUX_ORG="${INFLUX_ORG:-edge-org}"
+TELEGRAF_BUCKET="${TELEGRAF_BUCKET:-telegraf}"
 
 compose_services_running() {
   local running
@@ -95,6 +101,26 @@ check_endpoint() {
   fi
 }
 
+check_telegraf_freshness() {
+  local token csv flux
+  if [ ! -s "$INFLUX_ADMIN_TOKEN_FILE" ]; then
+    echo "telegraf_check_missing_admin_token"
+    return 1
+  fi
+  token="$(tr -d '\r\n' < "$INFLUX_ADMIN_TOKEN_FILE")"
+  flux="from(bucket: \"${TELEGRAF_BUCKET}\") |> range(start: -2m) |> filter(fn: (r) => r._measurement == \"cpu\" and r.cpu == \"cpu-total\") |> last() |> keep(columns: [\"_time\"])"
+  csv="$(curl --connect-timeout 2 --max-time 8 -fsS \
+    -H "Authorization: Token $token" \
+    -H "Accept: application/csv" \
+    -H "Content-Type: application/vnd.flux" \
+    --data-binary "$flux" \
+    "$INFLUX_API_URL/api/v2/query?org=$INFLUX_ORG" 2>/dev/null || true)"
+  if ! awk 'BEGIN { rows=0 } !/^#/ && NF { rows++ } END { exit(rows >= 2 ? 0 : 1) }' <<<"$csv"; then
+    echo "telegraf_metrics_stale"
+    return 1
+  fi
+}
+
 deadline=$((SECONDS + TIMEOUT_S))
 last_err="unknown"
 
@@ -104,6 +130,10 @@ while [ "$SECONDS" -lt "$deadline" ]; do
     continue
   fi
   if ! last_err="$(check_endpoint influx "$INFLUX_HEALTH_URL" '"status":"pass"')"; then
+    sleep 2
+    continue
+  fi
+  if ! last_err="$(check_telegraf_freshness)"; then
     sleep 2
     continue
   fi

@@ -97,14 +97,10 @@ cd "$STACK_DIR"
 docker compose pull
 "$STACK_DIR/scripts/sync-defaults.sh" --env-file "$ENV_FILE"
 
+log "validating influx buckets and telegraf token"
+docker compose up -d influxdb
+"$STACK_DIR/scripts/bootstrap-influx.sh"
 docker compose up -d
-
-if [ ! -s "$STACK_DIR/.secrets/influx.telegraf.token" ]; then
-  log "bootstrapping influx buckets/tokens"
-  "$STACK_DIR/scripts/bootstrap-influx.sh" || true
-else
-  log "telegraf token exists; skipping influx bootstrap"
-fi
 
 ensure_user_owned "$STACK_DIR/.secrets"
 

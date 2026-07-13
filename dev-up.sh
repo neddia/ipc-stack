@@ -97,6 +97,12 @@ compose_up() {
   docker compose "${COMPOSE_BASE_ARGS[@]}" "$@" up "${UP_ARGS[@]}"
 }
 
+# Influx must exist before the scoped Telegraf token can be validated or
+# created. Starting it alone also avoids creating an invalid directory bind
+# when the token file does not exist yet on a clean install.
+docker compose "${COMPOSE_BASE_ARGS[@]}" up -d influxdb
+IPC_SECRETS_DIR="$SECRETS_DIR" "$STACK_DIR/scripts/bootstrap-influx.sh" "$ENV_FILE"
+
 if [ "${ENABLE_TAILWIND:-1}" = "1" ]; then
   compose_up --profile ui
 else
@@ -108,8 +114,4 @@ if [ "${ENABLE_SIM:-0}" = "1" ]; then
   # fake miner can bind to service:site-agent without racing container setup.
   compose_up --profile sim
   nohup "$STACK_DIR/scripts/watch-sim-deps.sh" "$ENV_FILE" >/tmp/ipc-stack-watch-sim-deps.log 2>&1 &
-fi
-
-if [ ! -s "$SECRETS_DIR/influx.telegraf.token" ]; then
-  IPC_SECRETS_DIR="$SECRETS_DIR" "$STACK_DIR/scripts/bootstrap-influx.sh" "$ENV_FILE" || true
 fi

@@ -145,11 +145,27 @@ PY
   TELEGRAF_BUCKET_ID="$(bucket_id "$TELEGRAF_BUCKET" <<<"$bucket_json")"
 fi
 
-if [ -s "$TELEGRAF_TOKEN_FILE" ]; then
-  log "telegraf token already exists"
+telegraf_token_valid() {
+  local candidate
+  [ -s "$TELEGRAF_TOKEN_FILE" ] || return 1
+  candidate="$(tr -d '\r\n' < "$TELEGRAF_TOKEN_FILE")"
+  [ -n "$candidate" ] || return 1
+  curl "${CURL_ARGS[@]}" -fsS -o /dev/null \
+    -H "Authorization: Token $candidate" \
+    -H "Content-Type: text/plain; charset=utf-8" \
+    -X POST \
+    --data-binary "ipc_telegraf_auth_check value=1i" \
+    "$INFLUX_URL/api/v2/write?org=$INFLUX_ORG&bucket=$TELEGRAF_BUCKET"
+}
+
+if telegraf_token_valid; then
+  log "validated existing telegraf token"
+  # The token is mounted into a rootless/container-user namespace. The parent
+  # secrets directory remains 0700 and only this write-only bucket token is
+  # made container-readable.
   chmod 644 "$TELEGRAF_TOKEN_FILE" || true
 else
-  log "creating telegraf token (write to $EDGE_BUCKET + $TELEGRAF_BUCKET)"
+  log "creating replacement telegraf token"
   token_json="$(curl "${CURL_ARGS[@]}" -fsS -H "Authorization: Token $ADMIN_TOKEN" \
     -H "Content-Type: application/json" \
     -X POST "$INFLUX_URL/api/v2/authorizations" \
@@ -159,7 +175,6 @@ payload = {
   "orgID": "$ORG_ID",
   "description": "ipc-telegraf-writer",
   "permissions": [
-    {"action": "write", "resource": {"type": "buckets", "id": "$EDGE_BUCKET_ID"}},
     {"action": "write", "resource": {"type": "buckets", "id": "$TELEGRAF_BUCKET_ID"}},
   ],
 }

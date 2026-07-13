@@ -102,11 +102,9 @@ if [ "${OPTIMIZER_LICENSE_POLICY:-required}" = "required" ] && [ -z "${CLOUD_LIC
 fi
 
 cd "$STACK_DIR"
+docker compose -f compose.yml --env-file "$ENV_FILE" up -d influxdb
+log "validating influx buckets and telegraf token"
+IPC_SECRETS_DIR="$SECRETS_DIR" "$STACK_DIR/scripts/bootstrap-influx.sh" "$ENV_FILE"
 docker compose -f compose.yml --env-file "$ENV_FILE" up -d
-
-if [ ! -s "$SECRETS_DIR/influx.telegraf.token" ]; then
-  log "bootstrapping influx token/buckets"
-  IPC_SECRETS_DIR="$SECRETS_DIR" "$STACK_DIR/scripts/bootstrap-influx.sh" "$ENV_FILE"
-fi
 
 "$STACK_DIR/scripts/check-health.sh" --env-file "$ENV_FILE"
