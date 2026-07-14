@@ -21,9 +21,11 @@ IPC_E2E_IMAGE_TAG=e2e-local-<commit> \
   ./provision/hyperv/build-media.sh
 ```
 
-After the changes are published, set `IPC_E2E_LOCAL_STACK=0` and omit the
-image preload variables to exercise the literal GitHub clone and GHCR pull
-path using the pinned release tags in the private seed.
+After the changes are published, set `IPC_E2E_LOCAL_STACK=0`, omit
+`IPC_E2E_IMAGE_DIR`, and set `IPC_E2E_IMAGE_TAG=sha-<commit>` to exercise the
+literal GitHub clone and GHCR pull path using the immutable image tag being
+qualified. This override only changes the generated CIDATA seed; it never
+edits the private source seed.
 
 The cloud API remains loopback-only. During a Hyper-V test, use Windows Python
 to expose it only on the Hyper-V Default Switch. Windows localhost forwarding

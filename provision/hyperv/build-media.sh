@@ -73,6 +73,9 @@ if [ -n "${IPC_E2E_CLOUD_BASE_URL:-}" ]; then
 fi
 
 mkdir -p "$stage/images"
+if [ -n "$IMAGE_TAG" ]; then
+  set_seed_values "$(IMAGE_TAG="$IMAGE_TAG" python3 -c 'import json,os; print(json.dumps({"SITE_AGENT_VERSION": os.environ["IMAGE_TAG"], "GATEWAYD_VERSION": os.environ["IMAGE_TAG"]}))')"
+fi
 if [ -n "$IMAGE_DIR" ]; then
   [ -n "$IMAGE_TAG" ] || die "IPC_E2E_IMAGE_TAG is required with IPC_E2E_IMAGE_DIR"
   site_archive="$IMAGE_DIR/site-agent-$IMAGE_TAG.tar.gz"
@@ -80,7 +83,7 @@ if [ -n "$IMAGE_DIR" ]; then
   [ -s "$site_archive" ] || die "missing $site_archive"
   [ -s "$gateway_archive" ] || die "missing $gateway_archive"
   cp "$site_archive" "$gateway_archive" "$stage/images/"
-  set_seed_values "$(IMAGE_TAG="$IMAGE_TAG" python3 -c 'import json,os; print(json.dumps({"SITE_AGENT_VERSION": os.environ["IMAGE_TAG"], "GATEWAYD_VERSION": os.environ["IMAGE_TAG"], "IPC_PRELOAD_IMAGE_DIR": "/opt/ipc-stack/.e2e-images", "SKIP_IMAGE_PULL": "1"}))')"
+  set_seed_values "$(python3 -c 'import json; print(json.dumps({"IPC_PRELOAD_IMAGE_DIR": "/opt/ipc-stack/.e2e-images", "SKIP_IMAGE_PULL": "1"}))')"
 fi
 
 console_hash="$(openssl passwd -6 "$(cat "$CONSOLE_PASSWORD_FILE")")"
