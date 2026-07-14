@@ -48,7 +48,6 @@ services:
       - ${ENV_FILE:-./.env}
     environment:
       SITE_CONFIG_PATH: /data/site-config.yml
-      GATEWAYD_DB_PATH: /data/gatewayd.sqlite3
       GATEWAYD_BUILTIN_PROFILES_DIR: /app/profiles
       GATEWAYD_SITE_PROFILES_DIR: /data/site-profiles
     depends_on:
