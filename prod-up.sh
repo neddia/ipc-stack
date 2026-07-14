@@ -30,6 +30,7 @@ ensure_user_owned() {
 if [ ! -f "$ENV_FILE" ]; then
   if [ -f "$STACK_DIR/.env.example" ]; then
     cp "$STACK_DIR/.env.example" "$ENV_FILE"
+    chmod 0600 "$ENV_FILE"
     log "created $ENV_FILE from .env.example"
   else
     echo "Missing env file: $ENV_FILE" >&2
@@ -42,6 +43,23 @@ set -a
 source "$ENV_FILE"
 set +a
 
+if [ -z "${HARDWARE_SERIAL:-}" ]; then
+  HARDWARE_SERIAL=""
+  if [ -r /sys/class/dmi/id/product_uuid ]; then
+    HARDWARE_SERIAL="$(tr -d '\r\n' </sys/class/dmi/id/product_uuid)"
+  fi
+  if [ -z "$HARDWARE_SERIAL" ]; then
+    HARDWARE_SERIAL="$(tr -d '\r\n' </etc/machine-id 2>/dev/null || true)"
+  fi
+  if [ -z "$HARDWARE_SERIAL" ]; then
+    echo "Unable to determine a stable HARDWARE_SERIAL" >&2
+    exit 1
+  fi
+  persist_env_var "$ENV_FILE" "HARDWARE_SERIAL" "$HARDWARE_SERIAL"
+  export HARDWARE_SERIAL
+  log "persisted host hardware identity"
+fi
+
 if [ -z "${SITE_AGENT_UID:-}" ] || [ -z "${SITE_AGENT_GID:-}" ]; then
   if [ -n "${SUDO_USER:-}" ] && id -u "$SUDO_USER" >/dev/null 2>&1; then
     SITE_AGENT_UID="$(id -u "$SUDO_USER")"
@@ -50,6 +68,7 @@ if [ -z "${SITE_AGENT_UID:-}" ] || [ -z "${SITE_AGENT_GID:-}" ]; then
 fi
 
 ensure_user_owned "$ENV_FILE"
+chmod 0600 "$ENV_FILE"
 
 export ENV_FILE
 

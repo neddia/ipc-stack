@@ -36,6 +36,16 @@ TELEGRAF_RETENTION="${TELEGRAF_RETENTION:-14d}"
 ADMIN_TOKEN_FILE="$SECRETS_DIR/influx.admin.token"
 TELEGRAF_TOKEN_FILE="$SECRETS_DIR/influx.telegraf.token"
 
+# Older install ordering could cause Docker to create the missing bind source
+# as a directory before bootstrap ran. Repair that exact empty-directory state
+# so a subsequent first-boot retry can recover without manual intervention.
+if [ -d "$TELEGRAF_TOKEN_FILE" ]; then
+  if ! rmdir "$TELEGRAF_TOKEN_FILE"; then
+    echo "[ipc] expected telegraf token file but found a non-empty directory: $TELEGRAF_TOKEN_FILE" >&2
+    exit 1
+  fi
+fi
+
 if [ ! -s "$ADMIN_TOKEN_FILE" ]; then
   echo "[ipc] missing admin token at $ADMIN_TOKEN_FILE" >&2
   exit 1

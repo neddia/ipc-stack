@@ -19,6 +19,7 @@
 #   FORCE=0|1               # bypass tailscale status check (still requires TS IP)
 #   ALLOW_LAN_SSH=0|1       # if 1, also allow SSH from LAN_CIDR (still not public)
 #   LAN_CIDR=192.168.0.0/16
+#   SETPOINT_UI_PORT=8000    # dashboard/control UI on tailnet + private LANs
 
 set -euo pipefail
 
@@ -27,6 +28,7 @@ SSH_PORT="${SSH_PORT:-22}"
 FORCE="${FORCE:-0}"
 ALLOW_LAN_SSH="${ALLOW_LAN_SSH:-0}"
 LAN_CIDR="${LAN_CIDR:-192.168.0.0/16}"
+SETPOINT_UI_PORT="${SETPOINT_UI_PORT:-8000}"
 
 log() { echo "[ipc-lockdown] $*"; }
 die() { echo "[ipc-lockdown] ERROR: $*" >&2; exit 1; }
@@ -202,6 +204,14 @@ configure_ufw() {
 
   # Deny SSH on all other interfaces (public/LAN/etc).
   ufw deny in "$SSH_PORT"/tcp >/dev/null 2>&1 || true
+
+  # Keep the appliance UI available on the tailnet and RFC1918 site LANs,
+  # without opening it to public source ranges. mDNS remains LAN-only.
+  ufw allow in on "$TS_IF" to any port "$SETPOINT_UI_PORT" proto tcp >/dev/null 2>&1 || true
+  for private_cidr in 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16; do
+    ufw allow from "$private_cidr" to any port "$SETPOINT_UI_PORT" proto tcp >/dev/null 2>&1 || true
+    ufw allow from "$private_cidr" to any port 5353 proto udp >/dev/null 2>&1 || true
+  done
 
   # Enable if not already active.
   ufw --force enable >/dev/null 2>&1 || true

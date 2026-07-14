@@ -12,7 +12,7 @@ Usage: sync-defaults.sh [--env-file PATH] [--image IMAGE[:TAG]] [--refresh-site-
 
 Copies bundled defaults out of the pinned site-agent image into host storage.
 - Always refreshes storage/site-config.example.yml
-- Initializes storage/site-config.yml when missing
+- Initializes storage/site-config.yml from the install-safe empty default
 - Creates persistent storage/site-profiles/ for commissioned site-owned profiles
 - Never overwrites runtime storage unless an explicit refresh flag is passed
 EOF
@@ -87,12 +87,16 @@ if [ ! -f "$TMP_DIR/site-config.example.yml" ]; then
   echo "[ipc-defaults] image is missing /app/defaults/site-config.example.yml" >&2
   exit 1
 fi
+if [ ! -f "$TMP_DIR/site-config.default.yml" ]; then
+  echo "[ipc-defaults] image is missing /app/defaults/site-config.default.yml" >&2
+  exit 1
+fi
 cp "$TMP_DIR/site-config.example.yml" "$STORAGE_DIR/site-config.example.yml"
 TOUCHED_PATHS+=("$STORAGE_DIR/site-config.example.yml")
 log "refreshed $STORAGE_DIR/site-config.example.yml"
 
 if [ ! -f "$STORAGE_DIR/site-config.yml" ] || [ "$REFRESH_SITE_CONFIG" = "1" ]; then
-  cp "$TMP_DIR/site-config.example.yml" "$STORAGE_DIR/site-config.yml"
+  cp "$TMP_DIR/site-config.default.yml" "$STORAGE_DIR/site-config.yml"
   TOUCHED_PATHS+=("$STORAGE_DIR/site-config.yml")
   if [ "$REFRESH_SITE_CONFIG" = "1" ]; then
     log "refreshed $STORAGE_DIR/site-config.yml from bundled defaults"

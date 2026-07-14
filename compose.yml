@@ -54,7 +54,6 @@ services:
       - influxdb
     volumes:
       - ${IPC_STORAGE_DIR:-/opt/site-agent/storage}:/data
-      - ${IPC_SECRETS_DIR:-/opt/site-agent/.secrets}:/run/secrets:ro
     ports:
       - "${GATEWAYD_BIND_HOST:-127.0.0.1}:${GATEWAYD_HOST_PORT:-8080}:8080"
 

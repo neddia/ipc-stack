@@ -119,6 +119,8 @@ Description=Write IPC host state for site-agent alerts
 
 [Service]
 Type=oneshot
+User=${SITE_AGENT_UID:-1000}
+Group=${SITE_AGENT_GID:-1000}
 Environment=IPC_STORAGE_DIR=${IPC_STORAGE_DIR:-/opt/site-agent/storage}
 ExecStart=${script_path}
 EOF

@@ -122,8 +122,27 @@ docker_login_ghcr() {
   unset GHCR_TOKEN
 }
 
+preload_images() {
+  local image_dir="${IPC_PRELOAD_IMAGE_DIR:-}"
+  [ -n "$image_dir" ] || return 0
+  [ -d "$image_dir" ] || { echo "Missing IPC_PRELOAD_IMAGE_DIR: $image_dir" >&2; exit 1; }
+  local archive loaded=0
+  for archive in "$image_dir"/*.tar "$image_dir"/*.tar.gz; do
+    [ -f "$archive" ] || continue
+    log "loading prebuilt image archive $(basename "$archive")"
+    if [[ "$archive" == *.gz ]]; then
+      gzip -dc "$archive" | docker load >/dev/null
+    else
+      docker load -i "$archive" >/dev/null
+    fi
+    loaded=1
+  done
+  [ "$loaded" = "1" ] || { echo "No image archives found in $image_dir" >&2; exit 1; }
+}
+
 if [ ! -f "$ENV_FILE" ]; then
   cp "$STACK_DIR/.env.example" "$ENV_FILE"
+  chmod 0600 "$ENV_FILE"
   log "created $ENV_FILE from example"
 fi
 
@@ -132,6 +151,26 @@ set -a
 # shellcheck disable=SC1090
 source "$ENV_FILE"
 set +a
+
+# The host identity must survive container recreation and be stable before the
+# IPC pairs with cloud. Container /etc/machine-id and hostnames are not durable
+# appliance identifiers.
+if [ -z "${HARDWARE_SERIAL:-}" ]; then
+  HARDWARE_SERIAL=""
+  if [ -r /sys/class/dmi/id/product_uuid ]; then
+    HARDWARE_SERIAL="$(tr -d '\r\n' </sys/class/dmi/id/product_uuid)"
+  fi
+  if [ -z "$HARDWARE_SERIAL" ]; then
+    HARDWARE_SERIAL="$(tr -d '\r\n' </etc/machine-id 2>/dev/null || true)"
+  fi
+  if [ -z "$HARDWARE_SERIAL" ]; then
+    echo "Unable to determine a stable HARDWARE_SERIAL" >&2
+    exit 1
+  fi
+  persist_env_var "$ENV_FILE" "HARDWARE_SERIAL" "$HARDWARE_SERIAL"
+  export HARDWARE_SERIAL
+  log "persisted host hardware identity"
+fi
 
 if [ -z "${SITE_AGENT_UID:-}" ] || [ -z "${SITE_AGENT_GID:-}" ]; then
   if [ -n "${SUDO_USER:-}" ] && id -u "$SUDO_USER" >/dev/null 2>&1; then
@@ -147,6 +186,7 @@ if [ -z "${SITE_AGENT_UID:-}" ] || [ -z "${SITE_AGENT_GID:-}" ]; then
 fi
 
 ensure_user_owned "$ENV_FILE"
+chmod 0600 "$ENV_FILE"
 
 STORAGE_DIR="${IPC_STORAGE_DIR:-/opt/site-agent/storage}"
 REPO_LICENSE_KEY="$STACK_DIR/cloud.license.ed25519.pub"
@@ -175,6 +215,8 @@ if [ "${SKIP_TAILSCALE:-0}" != "1" ]; then
     fi
   fi
 fi
+
+preload_images
 
 IPC_SECRETS_DIR="${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}" "$STACK_DIR/scripts/gen-ipc-secrets.sh"
 ensure_user_owned "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}"
@@ -219,17 +261,26 @@ if [ "${OPTIMIZER_LICENSE_POLICY:-required}" = "required" ] && [ -z "${CLOUD_LIC
   exit 1
 fi
 
-docker_login_ghcr
+if [ "${SKIP_IMAGE_PULL:-0}" != "1" ]; then
+  docker_login_ghcr
+fi
 
 log "starting IPC stack"
 cd "$STACK_DIR"
-docker compose pull
+if [ "${SKIP_IMAGE_PULL:-0}" != "1" ]; then
+  docker compose pull
+else
+  log "using preloaded images; registry pull skipped"
+fi
 "$STACK_DIR/scripts/sync-defaults.sh" --env-file "$ENV_FILE"
 
-docker compose up -d
-
+log "starting influx"
+docker compose up -d influxdb
 log "bootstrapping influx buckets/tokens"
-"$STACK_DIR/scripts/bootstrap-influx.sh" || true
+IPC_SECRETS_DIR="${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}" \
+  "$STACK_DIR/scripts/bootstrap-influx.sh" "$ENV_FILE"
+log "starting IPC services"
+docker compose up -d
 "$STACK_DIR/scripts/check-health.sh" --env-file "$ENV_FILE"
 
 if [ "${TAILSCALE_SSH_ONLY:-0}" = "1" ]; then

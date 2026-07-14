@@ -117,4 +117,7 @@ simulator and the fake cgminer fleet used for dashboard/optimizer testing.
 - Secrets are created in `./.secrets/` (gitignored).
 - Storage lives at `/opt/site-agent/storage` by default (bind mount).
 - The image tag is controlled by `SITE_AGENT_VERSION` in `.env`.
-- `install.sh` and `update.sh` refresh `site-config.example.yml` from the pinned `site-agent` image. Built-in profiles stay immutable inside each service image; commissioned profiles live in persistent `storage/site-profiles/`.
+- `install.sh` initializes missing runtime config from the install-safe empty
+  default and refreshes `site-config.example.yml` as a commissioning reference.
+  Built-in profiles stay immutable inside each service image; commissioned
+  profiles live in persistent `storage/site-profiles/`.

@@ -44,9 +44,10 @@ autoinstall:
   network:
     version: 2
     ethernets:
-      all-en:
+      all-ethernet:
         match:
-          name: "en*"
+          # Covers both predictable names (eno*/enp*/ens*) and legacy eth*.
+          name: "e*"
         dhcp4: true
         optional: true
 

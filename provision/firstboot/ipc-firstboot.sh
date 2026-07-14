@@ -68,6 +68,10 @@ pin_env() {
 }
 pin_env "SITE_AGENT_VERSION" "${SITE_AGENT_VERSION:-}"
 pin_env "GATEWAYD_VERSION" "${GATEWAYD_VERSION:-}"
+pin_env "CLOUD_BASE_URL" "${CLOUD_BASE_URL:-}"
+pin_env "CLOUD_PUBLIC_BASE_URL" "${CLOUD_PUBLIC_BASE_URL:-}"
+pin_env "HARDWARE_SERIAL" "${HARDWARE_SERIAL:-}"
+chmod 0600 "$STACK_DIR/.env"
 
 log "running install.sh"
 if ! "$STACK_DIR/install.sh"; then
