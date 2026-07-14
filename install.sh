@@ -37,7 +37,7 @@ install_docker_stack() {
     return
   fi
   log "installing docker + compose plugin (official repo)"
-  apt-get update -y >/dev/null 2>&1 || apt-get update -y || true
+  apt-get update -y
   apt-get install -y ca-certificates curl gnupg
 
   install -m 0755 -d /etc/apt/keyrings
@@ -48,7 +48,7 @@ install_docker_stack() {
     "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" \
     > /etc/apt/sources.list.d/docker.list
 
-  apt-get update -y >/dev/null 2>&1 || apt-get update -y || true
+  apt-get update -y
   apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
   systemctl enable --now docker || true
 }
@@ -159,7 +159,7 @@ else
 fi
 
 if [ "${SKIP_HARDENING:-0}" != "1" ]; then
-  "$STACK_DIR/scripts/bootstrap-host.sh" || true
+  "$STACK_DIR/scripts/bootstrap-host.sh"
 fi
 
 install_docker_stack
@@ -178,6 +178,16 @@ fi
 
 IPC_SECRETS_DIR="${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}" "$STACK_DIR/scripts/gen-ipc-secrets.sh"
 ensure_user_owned "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}"
+
+# Use the per-site generated gatewayd token; never run with the old shared default.
+if [ -z "${GATEWAYD_TOKEN:-}" ] || [ "${GATEWAYD_TOKEN:-}" = "devtoken" ]; then
+  if [ -s "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}/gatewayd.token" ]; then
+    GATEWAYD_TOKEN="$(cat "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}/gatewayd.token")"
+    persist_env_var "$ENV_FILE" "GATEWAYD_TOKEN" "$GATEWAYD_TOKEN"
+    export GATEWAYD_TOKEN
+    log "set GATEWAYD_TOKEN from generated secret"
+  fi
+fi
 
 if [ ! -s "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}/cloud.license.ed25519.pub" ] && [ -s "$REPO_LICENSE_KEY" ]; then
   cp "$REPO_LICENSE_KEY" "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}/cloud.license.ed25519.pub"

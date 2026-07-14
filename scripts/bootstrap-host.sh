@@ -17,7 +17,7 @@ apt_install() {
   fi
   if [ "$APT_UPDATED" -eq 0 ]; then
     log "apt-get update"
-    apt-get update -y >/dev/null 2>&1 || apt-get update -y || true
+    apt-get update -y
     APT_UPDATED=1
   fi
   apt-get install -y "$@"
@@ -90,7 +90,8 @@ docker_log_limits() {
   "log-opts": {
     "max-size": "20m",
     "max-file": "5"
-  }
+  },
+  "live-restore": true
 }
 CONF
     systemctl restart docker || true

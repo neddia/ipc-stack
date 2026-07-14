@@ -2,3 +2,4 @@
 .secrets/
 seed/
 storage/
+.watch-sim-deps.lock

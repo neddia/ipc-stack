@@ -11,6 +11,17 @@ ENV_FILE="$STACK_DIR/.env"
 
 log() { echo "[ipc-update] $*"; }
 
+persist_env_var() {
+  local file="$1"
+  local key="$2"
+  local value="$3"
+  if grep -q "^${key}=" "$file"; then
+    sed -ri "s|^${key}=.*|${key}=${value}|" "$file"
+  else
+    printf '\n%s=%s\n' "$key" "$value" >>"$file"
+  fi
+}
+
 ensure_user_owned() {
   local path="$1"
   if [ -z "$path" ] || [ ! -e "$path" ]; then
@@ -62,25 +73,69 @@ docker_login_ghcr() {
   unset GHCR_TOKEN
 }
 
+set_release() {
+  # Pin both images to the same release and remember the outgoing pin
+  # so a bad update can roll back (and prune knows what to keep).
+  local version="$1"
+  if [ -n "${SITE_AGENT_VERSION:-}" ] && [ "$SITE_AGENT_VERSION" != "$version" ]; then
+    persist_env_var "$ENV_FILE" "SITE_AGENT_PREV_VERSION" "$SITE_AGENT_VERSION"
+    SITE_AGENT_PREV_VERSION="$SITE_AGENT_VERSION"
+  fi
+  if [ -n "${GATEWAYD_VERSION:-}" ] && [ "$GATEWAYD_VERSION" != "$version" ]; then
+    persist_env_var "$ENV_FILE" "GATEWAYD_PREV_VERSION" "$GATEWAYD_VERSION"
+    GATEWAYD_PREV_VERSION="$GATEWAYD_VERSION"
+  fi
+  persist_env_var "$ENV_FILE" "SITE_AGENT_VERSION" "$version"
+  persist_env_var "$ENV_FILE" "GATEWAYD_VERSION" "$version"
+  export SITE_AGENT_VERSION="$version" GATEWAYD_VERSION="$version"
+  export SITE_AGENT_PREV_VERSION="${SITE_AGENT_PREV_VERSION:-}" GATEWAYD_PREV_VERSION="${GATEWAYD_PREV_VERSION:-}"
+  log "set SITE_AGENT_VERSION=$version GATEWAYD_VERSION=$version"
+}
+
+rollback_release() {
+  local sa_prev="${SITE_AGENT_PREV_VERSION:-}"
+  local gw_prev="${GATEWAYD_PREV_VERSION:-$sa_prev}"
+  if [ -z "$sa_prev" ]; then
+    return 1
+  fi
+  log "rolling back to site-agent=$sa_prev gatewayd=$gw_prev"
+  persist_env_var "$ENV_FILE" "SITE_AGENT_VERSION" "$sa_prev"
+  persist_env_var "$ENV_FILE" "GATEWAYD_VERSION" "$gw_prev"
+  export SITE_AGENT_VERSION="$sa_prev" GATEWAYD_VERSION="$gw_prev"
+  docker compose up -d
+}
+
+prune_image_tags() {
+  # Remove tags of $repo other than the two we keep (current + previous).
+  local repo="$1" keep_a="$2" keep_b="$3"
+  if [ -z "$repo" ]; then
+    return
+  fi
+  docker images --format '{{.Repository}}:{{.Tag}}' "$repo" 2>/dev/null | while read -r ref; do
+    tag="${ref##*:}"
+    if [ "$tag" = "<none>" ]; then
+      continue  # dangling layers; docker image prune handles them
+    fi
+    if [ "$tag" != "$keep_a" ] && [ "$tag" != "$keep_b" ]; then
+      log "pruning old image $ref"
+      docker rmi "$ref" >/dev/null 2>&1 || true
+    fi
+  done
+}
+
 if [ ! -f "$ENV_FILE" ]; then
   echo "Missing $ENV_FILE. Run ./install.sh first." >&2
   exit 1
-fi
-
-if [ $# -ge 1 ]; then
-  VERSION="$1"
-  if grep -q '^SITE_AGENT_VERSION=' "$ENV_FILE"; then
-    sed -ri "s/^SITE_AGENT_VERSION=.*/SITE_AGENT_VERSION=${VERSION}/" "$ENV_FILE"
-  else
-    echo "SITE_AGENT_VERSION=${VERSION}" >> "$ENV_FILE"
-  fi
-  log "set SITE_AGENT_VERSION=$VERSION"
 fi
 
 set -a
 # shellcheck disable=SC1090
 source "$ENV_FILE"
 set +a
+
+if [ $# -ge 1 ]; then
+  set_release "$1"
+fi
 
 if [ -z "${SITE_AGENT_UID:-}" ] || [ -z "${SITE_AGENT_GID:-}" ]; then
   if [ -n "${SUDO_USER:-}" ] && id -u "$SUDO_USER" >/dev/null 2>&1; then
@@ -104,6 +159,22 @@ docker compose up -d
 
 ensure_user_owned "$STACK_DIR/.secrets"
 
-"$STACK_DIR/scripts/check-health.sh" --env-file "$ENV_FILE"
+if ! "$STACK_DIR/scripts/check-health.sh" --env-file "$ENV_FILE"; then
+  log "health check FAILED on ${SITE_AGENT_VERSION:-?}"
+  if rollback_release; then
+    if "$STACK_DIR/scripts/check-health.sh" --env-file "$ENV_FILE"; then
+      log "rollback to ${SITE_AGENT_VERSION} healthy; update aborted"
+    else
+      log "rollback did NOT become healthy; manual intervention required"
+    fi
+  else
+    log "no previous version recorded; cannot auto-rollback"
+  fi
+  exit 1
+fi
+
+prune_image_tags "${SITE_AGENT_IMAGE:-}" "${SITE_AGENT_VERSION:-latest}" "${SITE_AGENT_PREV_VERSION:-}"
+prune_image_tags "${GATEWAYD_IMAGE:-}" "${GATEWAYD_VERSION:-latest}" "${GATEWAYD_PREV_VERSION:-}"
+docker image prune -f >/dev/null || true
 
 log "update complete"

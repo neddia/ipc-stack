@@ -20,7 +20,7 @@ apt_install() {
   if ! command -v apt-get >/dev/null 2>&1; then
     return 1
   fi
-  apt-get update -y >/dev/null 2>&1 || apt-get update -y || true
+  apt-get update -y
   apt-get install -y "$@"
 }
 

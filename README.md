@@ -9,7 +9,10 @@ stored on the host so rollbacks are safe.
 - `compose.yml` — Influx + gatewayd + site-agent (image-based).
 - `.env.example` — deployment settings (copy to `.env`).
 - `install.sh` — one-time install + seed storage from the pinned image.
-- `update.sh` — pull a new image tag and restart.
+- `update.sh` — pin both images to a release, restart, health-gate with
+  auto-rollback to the previous release, prune old images.
+- `provision/` — zero-touch OS install (Ubuntu autoinstall + first-boot
+  bring-up); see `provision/README.md`.
 - `scripts/sync-defaults.sh` — extract the bundled config example and prepare persistent site-profile storage.
 - `scripts/` — helpers (secrets, hardening, SSH lockdown).
 
@@ -88,6 +91,7 @@ SETPOINT_DIR=/home/you/setpoint ./dev-up.sh
 ```
 
 `dev-up.sh` will prefer `.env.dev` if present; otherwise it uses `.env`.
+
 
 For dev, secrets default to `../ipc-secrets` (outside the repo) via `.env.dev`.
 

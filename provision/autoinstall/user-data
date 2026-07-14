@@ -1,0 +1,73 @@
+#cloud-config
+# Ubuntu Server autoinstall for IPC appliances.
+#
+# Per-machine placeholders to fill before flashing (see provision/README.md):
+#   - identity.hostname     : ipc-<site>
+#   - identity.password     : output of `mkpasswd -m sha-512` (store the
+#                             cleartext in your password manager; it is the
+#                             physical-console password only)
+#   - ssh.authorized-keys   : your operator public key(s)
+#
+# Site-specific secrets (Tailscale auth key, GHCR token) do NOT go in this
+# file; they live in seed.env on the CIDATA volume and are consumed on first
+# boot. This file can be reused across machines with only the fields above
+# changed.
+autoinstall:
+  version: 1
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  timezone: Etc/UTC
+
+  identity:
+    hostname: ipc-CHANGEME
+    username: toops
+    # mkpasswd -m sha-512   (from the `whois` package)
+    password: "CHANGEME_SHA512_CRYPT"
+
+  ssh:
+    install-server: true
+    allow-pw: false
+    authorized-keys:
+      - "ssh-ed25519 AAAA_CHANGEME_OPERATOR_KEY toops-ops"
+
+  storage:
+    layout:
+      name: direct
+
+  packages:
+    - git
+    - curl
+    - ca-certificates
+
+  # Never block boot on a flaky site uplink.
+  network:
+    version: 2
+    ethernets:
+      all-en:
+        match:
+          name: "en*"
+        dhcp4: true
+        optional: true
+
+  late-commands:
+    # 1) Clone the deploy repo into the installed system.
+    - curtin in-target -- git clone https://github.com/neddia/ipc-stack /opt/ipc-stack
+
+    # 2) Copy the per-site seed (secrets) from the CIDATA volume, root-only.
+    - |
+      dev="$(blkid -L CIDATA 2>/dev/null || true)"
+      if [ -n "$dev" ]; then
+        mkdir -p /mnt/cidata
+        mount -o ro "$dev" /mnt/cidata || true
+        if [ -f /mnt/cidata/seed.env ]; then
+          install -m 0600 -o root -g root /mnt/cidata/seed.env /target/opt/ipc-stack/seed.env
+        fi
+        umount /mnt/cidata || true
+      fi
+
+    # 3) Install + enable the first-boot bring-up unit.
+    - cp /target/opt/ipc-stack/provision/firstboot/ipc-firstboot.sh /target/usr/local/sbin/ipc-firstboot.sh
+    - chmod 0755 /target/usr/local/sbin/ipc-firstboot.sh
+    - cp /target/opt/ipc-stack/provision/firstboot/ipc-firstboot.service /target/etc/systemd/system/ipc-firstboot.service
+    - curtin in-target -- systemctl enable ipc-firstboot.service

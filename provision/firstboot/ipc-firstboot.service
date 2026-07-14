@@ -1,0 +1,15 @@
+[Unit]
+Description=IPC first-boot bring-up (tailscale + stack install)
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=!/var/lib/ipc-firstboot.done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ipc-firstboot.sh
+RemainAfterExit=yes
+# Slow site uplinks + full docker/tailscale install can take a while.
+TimeoutStartSec=45min
+
+[Install]
+WantedBy=multi-user.target

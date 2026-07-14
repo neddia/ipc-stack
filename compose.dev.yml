@@ -13,7 +13,6 @@ services:
       - cloud_core
     extra_hosts:
       - "host.docker.internal:host-gateway"
-      - "cloud-dev-host:host-gateway"
 
   modbus-sim:
     profiles: ["sim"]

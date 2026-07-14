@@ -71,6 +71,16 @@ mkdir -p "$SECRETS_DIR"
 IPC_SECRETS_DIR="$SECRETS_DIR" "$STACK_DIR/scripts/gen-ipc-secrets.sh"
 ensure_user_owned "$SECRETS_DIR"
 
+# Use the per-site generated gatewayd token; never run with the old shared default.
+if [ -z "${GATEWAYD_TOKEN:-}" ] || [ "${GATEWAYD_TOKEN:-}" = "devtoken" ]; then
+  if [ -s "$SECRETS_DIR/gatewayd.token" ]; then
+    GATEWAYD_TOKEN="$(cat "$SECRETS_DIR/gatewayd.token")"
+    persist_env_var "$ENV_FILE" "GATEWAYD_TOKEN" "$GATEWAYD_TOKEN"
+    export GATEWAYD_TOKEN
+    log "set GATEWAYD_TOKEN from generated secret"
+  fi
+fi
+
 if [ ! -s "$SECRETS_DIR/cloud.license.ed25519.pub" ] && [ -s "$REPO_LICENSE_KEY" ]; then
   cp "$REPO_LICENSE_KEY" "$SECRETS_DIR/cloud.license.ed25519.pub"
   chmod 0644 "$SECRETS_DIR/cloud.license.ed25519.pub" 2>/dev/null || true

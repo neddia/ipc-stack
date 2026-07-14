@@ -2,10 +2,10 @@
 # toops-ipc-lockdown.sh
 #
 # Lock down an Ubuntu IPC so OpenSSH is reachable ONLY over Tailscale:
-#  - sshd listens only on the device's Tailscale IPv4 (100.x)
-#  - disables password / interactive auth
-#  - ensures ssh starts AFTER tailscaled (prevents boot bind failures)
+#  - disables password / interactive auth (key-only)
 #  - enables UFW and allows TCP/22 ONLY on tailscale0
+#  - sshd listens on all interfaces (UFW enforces reachability), so a
+#    re-enrolled device with a new tailnet IP never bricks sshd
 #
 # This keeps VS Code Remote-SSH working as long as you connect via MagicDNS
 # or the 100.x Tailscale IP (NOT the public/LAN IP).
@@ -89,18 +89,17 @@ ensure_tailscale_up() {
 }
 
 write_sshd_dropin() {
-  local ts_ip="$1"
   local conf_dir="/etc/ssh/sshd_config.d"
   local conf_file="${conf_dir}/99-toops-tailscale-only.conf"
 
   mkdir -p "$conf_dir"
 
-  # Hardening + bind to Tailscale IP only
+  # Auth hardening only. sshd listens on all interfaces; UFW restricts
+  # reachability to tailscale0. (Pinning ListenAddress to the current
+  # tailnet IP bricks sshd on boot if the device is ever re-enrolled and
+  # gets a new 100.x address.)
   cat >"$conf_file" <<EOF
 # Managed by toops-ipc-lockdown.sh
-# Only listen on Tailscale IPv4:
-ListenAddress ${ts_ip}
-
 # Auth hardening:
 PasswordAuthentication no
 KbdInteractiveAuthentication no
@@ -217,11 +216,8 @@ main() {
   ensure_openssh
 
   ensure_tailscale_up
-  local ts_ip
-  ts_ip="$(get_ts_ip4)"
-  [[ -n "$ts_ip" ]] || die "No Tailscale IPv4 found; refusing to proceed."
 
-  write_sshd_dropin "$ts_ip"
+  write_sshd_dropin
   ensure_sshd_after_tailscale
   validate_and_restart_sshd
   configure_ufw
