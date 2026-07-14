@@ -59,10 +59,12 @@ services:
       dockerfile: docker/site-agent.Dockerfile
     environment:
       SITE_CONFIG_PATH: /app/storage/site-config.sim.yml
-      PROFILES_DIR: /app/storage/profiles
+      BUILTIN_PROFILES_DIR: /app/profiles
+      SITE_PROFILES_DIR: /app/storage/site-profiles
     volumes:
       - ${SETPOINT_DIR:-../setpoint}/site-agent:/app/site-agent
       - ${SETPOINT_DIR:-../setpoint}/ticlib:/app/ticlib
+      - ${SETPOINT_DIR:-../setpoint}/profiles:/app/profiles:ro
     depends_on:
       influxdb:
         condition: service_started
@@ -102,10 +104,12 @@ services:
       dockerfile: docker/gatewayd.Dockerfile
     environment:
       SITE_CONFIG_PATH: /data/site-config.sim.yml
-      GATEWAYD_PROFILES_DIR: /data/profiles
+      GATEWAYD_BUILTIN_PROFILES_DIR: /app/profiles
+      GATEWAYD_SITE_PROFILES_DIR: /data/site-profiles
     volumes:
       - ${SETPOINT_DIR:-../setpoint}/gatewayd:/app/gatewayd
       - ${SETPOINT_DIR:-../setpoint}/ticlib:/app/ticlib
+      - ${SETPOINT_DIR:-../setpoint}/profiles:/app/profiles:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

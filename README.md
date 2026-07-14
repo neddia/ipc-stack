@@ -10,7 +10,7 @@ stored on the host so rollbacks are safe.
 - `.env.example` — deployment settings (copy to `.env`).
 - `install.sh` — one-time install + seed storage from the pinned image.
 - `update.sh` — pull a new image tag and restart.
-- `scripts/sync-defaults.sh` — extract bundled config/profile defaults from the `site-agent` image into host storage.
+- `scripts/sync-defaults.sh` — extract the bundled config example and prepare persistent site-profile storage.
 - `scripts/` — helpers (secrets, hardening, SSH lockdown).
 
 ## Quick start (new IPC)
@@ -113,4 +113,4 @@ simulator and the fake cgminer fleet used for dashboard/optimizer testing.
 - Secrets are created in `./.secrets/` (gitignored).
 - Storage lives at `/opt/site-agent/storage` by default (bind mount).
 - The image tag is controlled by `SITE_AGENT_VERSION` in `.env`.
-- `install.sh` and `update.sh` refresh `site-config.example.yml` and `profiles.defaults/` from the pinned `site-agent` image, and only initialize runtime `site-config.yml` / `profiles/` when missing.
+- `install.sh` and `update.sh` refresh `site-config.example.yml` from the pinned `site-agent` image. Built-in profiles stay immutable inside each service image; commissioned profiles live in persistent `storage/site-profiles/`.

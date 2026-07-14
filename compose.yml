@@ -31,7 +31,8 @@ services:
       INFLUX_ORG: ${INFLUX_ORG:-edge-org}
       INFLUX_BUCKET: ${INFLUX_BUCKET:-edge-site}
       INFLUX_TOKEN_FILE: /run/secrets/influx.admin.token
-      PROFILES_DIR: /app/storage/profiles
+      BUILTIN_PROFILES_DIR: /app/profiles
+      SITE_PROFILES_DIR: /app/storage/site-profiles
     depends_on:
       - influxdb
     volumes:
@@ -48,7 +49,8 @@ services:
     environment:
       SITE_CONFIG_PATH: /data/site-config.yml
       GATEWAYD_DB_PATH: /data/gatewayd.sqlite3
-      GATEWAYD_PROFILES_DIR: /data/profiles
+      GATEWAYD_BUILTIN_PROFILES_DIR: /app/profiles
+      GATEWAYD_SITE_PROFILES_DIR: /data/site-profiles
     depends_on:
       - influxdb
     volumes:
