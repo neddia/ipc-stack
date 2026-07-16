@@ -70,14 +70,16 @@ tailscale_up() {
   fi
   local tags="${TS_TAGS:-tag:ipc}"
   local hostname="${TS_HOSTNAME:-}"
-  local args=(--ssh --advertise-tags "$tags")
+  # Tailscale supplies the private transport. The host's normal OpenSSH
+  # daemon remains the deliberately separate, key-only login layer.
+  local args=(--advertise-tags "$tags")
   if [ -n "${TS_AUTHKEY:-}" ]; then
     args=(--authkey "$TS_AUTHKEY" "${args[@]}")
   fi
   if [ -n "$hostname" ]; then
     args+=(--hostname "$hostname")
   fi
-  log "running tailscale up --ssh --advertise-tags=$tags"
+  log "running tailscale up --advertise-tags=$tags"
   tailscale up "${args[@]}"
 }
 
@@ -284,7 +286,7 @@ docker compose up -d
 "$STACK_DIR/scripts/check-health.sh" --env-file "$ENV_FILE"
 
 if [ "${TAILSCALE_SSH_ONLY:-0}" = "1" ]; then
-  "$STACK_DIR/scripts/lockdown-ssh.sh" || true
+  "$STACK_DIR/scripts/lockdown-ssh.sh"
 fi
 
 log "install complete"

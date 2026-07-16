@@ -3,3 +3,11 @@
 seed/
 storage/
 .watch-sim-deps.lock
+.watch-sim-deps.pid
+
+# Provisioning credentials belong under ~/.config/toops-e2e, never in this
+# public repository. Keep accidental local copies out of Git as defense in
+# depth; the checked-in templates use the .example suffix.
+seed.env
+operator.env
+tailscale.env

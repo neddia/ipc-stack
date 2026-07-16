@@ -8,10 +8,9 @@
 #                             physical-console password only)
 #   - ssh.authorized-keys   : your operator public key(s)
 #
-# Site-specific secrets (Tailscale auth key, GHCR token) do NOT go in this
-# file; they live in seed.env on the CIDATA volume and are consumed on first
-# boot. This file can be reused across machines with only the fields above
-# changed.
+# Provisioning credentials (a one-time Tailscale key and read-only GHCR token)
+# are embedded by the media builder and consumed on first boot. They do not
+# belong in this reusable template.
 autoinstall:
   version: 1
   locale: en_US.UTF-8
@@ -55,17 +54,8 @@ autoinstall:
     # 1) Clone the deploy repo into the installed system.
     - curtin in-target -- git clone https://github.com/neddia/ipc-stack /opt/ipc-stack
 
-    # 2) Copy the per-site seed (secrets) from the CIDATA volume, root-only.
-    - |
-      dev="$(blkid -L CIDATA 2>/dev/null || true)"
-      if [ -n "$dev" ]; then
-        mkdir -p /mnt/cidata
-        mount -o ro "$dev" /mnt/cidata || true
-        if [ -f /mnt/cidata/seed.env ]; then
-          install -m 0600 -o root -g root /mnt/cidata/seed.env /target/opt/ipc-stack/seed.env
-        fi
-        umount /mnt/cidata || true
-      fi
+    # 2) Copy the embedded, per-device seed root-only.
+    - install -m 0600 -o root -g root /cdrom/nocloud/seed.env /target/opt/ipc-stack/seed.env
 
     # 3) Install + enable the first-boot bring-up unit.
     - cp /target/opt/ipc-stack/provision/firstboot/ipc-firstboot.sh /target/usr/local/sbin/ipc-firstboot.sh

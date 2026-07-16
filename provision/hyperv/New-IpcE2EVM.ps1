@@ -1,7 +1,6 @@
 param(
     [string]$Name = "ipc-e2e-x86-01",
     [Parameter(Mandatory = $true)][string]$InstallerIso,
-    [Parameter(Mandatory = $true)][string]$SeedIso,
     [Parameter(Mandatory = $true)][string]$VhdPath,
     [string]$SwitchName = "Default Switch",
     [int]$ProcessorCount = 2,
@@ -27,7 +26,6 @@ Set-VMFirmware -VMName $Name -EnableSecureBoot On `
     -SecureBootTemplate MicrosoftUEFICertificateAuthority
 
 $installerDrive = Add-VMDvdDrive -VMName $Name -Path $InstallerIso -Passthru
-Add-VMDvdDrive -VMName $Name -Path $SeedIso | Out-Null
 Set-VMFirmware -VMName $Name -FirstBootDevice $installerDrive
 Start-VM -Name $Name
 Get-VM -Name $Name | Select-Object Name, State, CPUUsage, MemoryAssigned, Uptime

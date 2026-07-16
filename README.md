@@ -18,6 +18,10 @@ stored on the host so rollbacks are safe.
 
 ## Quick start (new IPC)
 
+For the normal one-ISO blank-machine workflow, see
+[`provision/README.md`](provision/README.md). The lower-level manual install
+remains available for repair and development:
+
 ```bash
 git clone https://github.com/<you>/ipc-stack.git
 cd ipc-stack

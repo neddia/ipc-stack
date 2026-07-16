@@ -9,7 +9,9 @@ BASE_ISO_SHA256="${UBUNTU_ISO_SHA256:-e907d92eeec9df64163a7e454cbc8d7755e8ddc7ed
 OUTPUT_DIR="${IPC_E2E_MEDIA_DIR:-$CACHE_DIR/media}"
 HOSTNAME="${IPC_E2E_HOSTNAME:-ipc-e2e-x86-01}"
 SEED_FILE="$PRIVATE_DIR/seed.env"
+TAILSCALE_ENV_FILE="${IPC_E2E_TAILSCALE_ENV_FILE:-$PRIVATE_DIR/tailscale.env}"
 SSH_KEY="$PRIVATE_DIR/id_ed25519"
+SSH_PUBLIC_KEY="${IPC_E2E_SSH_PUBLIC_KEY:-$SSH_KEY.pub}"
 CONSOLE_PASSWORD_FILE="$PRIVATE_DIR/console-password"
 ISO_TOOLS_IMAGE="toops/ipc-e2e-iso-tools:bookworm"
 IMAGE_DIR="${IPC_E2E_IMAGE_DIR:-}"
@@ -25,11 +27,16 @@ log() { echo "[ipc-e2e] $*"; }
 echo "$BASE_ISO_SHA256  $BASE_ISO" | sha256sum --check --status \
   || die "Ubuntu ISO checksum mismatch: $BASE_ISO"
 mkdir -p "$PRIVATE_DIR" "$CACHE_DIR" "$OUTPUT_DIR"
-chmod 0700 "$PRIVATE_DIR"
+chmod 0700 "$PRIVATE_DIR" "$CACHE_DIR" "$OUTPUT_DIR"
 
-if [ ! -s "$SSH_KEY" ]; then
-  ssh-keygen -q -t ed25519 -N "" -C "ipc-e2e" -f "$SSH_KEY"
-  chmod 0600 "$SSH_KEY"
+if [ ! -s "$SSH_PUBLIC_KEY" ]; then
+  if [ ! -s "$SSH_KEY" ]; then
+    ssh-keygen -q -t ed25519 -N "" -C "ipc-e2e" -f "$SSH_KEY"
+    chmod 0600 "$SSH_KEY"
+  else
+    ssh-keygen -y -f "$SSH_KEY" >"$SSH_PUBLIC_KEY"
+    chmod 0644 "$SSH_PUBLIC_KEY"
+  fi
 fi
 if [ ! -s "$CONSOLE_PASSWORD_FILE" ]; then
   openssl rand -base64 24 > "$CONSOLE_PASSWORD_FILE"
@@ -68,6 +75,24 @@ PY
 
 set_seed_values "$(HOSTNAME="$HOSTNAME" python3 -c 'import json,os; print(json.dumps({"TS_HOSTNAME": os.environ["HOSTNAME"]}))')"
 
+if [ -s "$TAILSCALE_ENV_FILE" ]; then
+  [ "$(stat -c '%a' "$TAILSCALE_ENV_FILE")" = "600" ] \
+    || die "$TAILSCALE_ENV_FILE must have mode 600"
+  set -a
+  # shellcheck disable=SC1090
+  source "$TAILSCALE_ENV_FILE"
+  set +a
+  log "minting a single-use Tailscale auth key for $HOSTNAME"
+  TS_AUTHKEY="$(TS_HOSTNAME="$HOSTNAME" python3 "$STACK_DIR/provision/mint-tailscale-auth-key.py")"
+  set_seed_values "$(TS_AUTHKEY="$TS_AUTHKEY" TS_TAGS="${TS_TAGS:-tag:ipc}" python3 -c \
+    'import json,os; print(json.dumps({"TS_AUTHKEY": os.environ["TS_AUTHKEY"], "TS_TAGS": os.environ["TS_TAGS"]}))')"
+  unset TS_AUTHKEY TS_API_CLIENT_ID TS_API_CLIENT_SECRET
+elif ! grep -Eq '^TS_AUTHKEY=.+$' "$stage/seed.env"; then
+  die "missing Tailscale automation config: $TAILSCALE_ENV_FILE"
+else
+  log "using the manually supplied Tailscale auth key from the private seed"
+fi
+
 if [ -n "${IPC_E2E_CLOUD_BASE_URL:-}" ]; then
   set_seed_values "$(python3 -c 'import json,os; print(json.dumps({"CLOUD_BASE_URL": os.environ["IPC_E2E_CLOUD_BASE_URL"], "CLOUD_PUBLIC_BASE_URL": os.environ["IPC_E2E_CLOUD_BASE_URL"]}))')"
 fi
@@ -87,7 +112,7 @@ if [ -n "$IMAGE_DIR" ]; then
 fi
 
 console_hash="$(openssl passwd -6 "$(cat "$CONSOLE_PASSWORD_FILE")")"
-operator_key="$(cat "$SSH_KEY.pub")"
+operator_key="$(cat "$SSH_PUBLIC_KEY")"
 USER_DATA="$stage/user-data" HOSTNAME="$HOSTNAME" CONSOLE_HASH="$console_hash" \
   USE_LOCAL_STACK="$USE_LOCAL_STACK" \
   OPERATOR_KEY="$operator_key" python3 - <<'PY'
@@ -105,16 +130,13 @@ text = text.replace(
 text = text.replace("  timezone: Etc/UTC\n", "  timezone: Etc/UTC\n  shutdown: poweroff\n")
 clone = "    - curtin in-target -- git clone https://github.com/neddia/ipc-stack /opt/ipc-stack"
 local_stack = """    - |
-      dev=\"$(blkid -L CIDATA 2>/dev/null || true)\"
-      [ -n \"$dev\" ] || exit 1
-      mkdir -p /mnt/cidata /target/opt/ipc-stack
-      mount -o ro \"$dev\" /mnt/cidata
-      tar -xzf /mnt/cidata/ipc-stack.tar.gz -C /target/opt/ipc-stack
-      if [ -d /mnt/cidata/images ]; then
+      source_root=/cdrom/nocloud
+      mkdir -p /target/opt/ipc-stack
+      tar -xzf \"$source_root/ipc-stack.tar.gz\" -C /target/opt/ipc-stack
+      if [ -d \"$source_root/images\" ]; then
         mkdir -p /target/opt/ipc-stack/.e2e-images
-        cp /mnt/cidata/images/*.tar.gz /target/opt/ipc-stack/.e2e-images/
+        cp \"$source_root\"/images/*.tar.gz /target/opt/ipc-stack/.e2e-images/ 2>/dev/null || true
       fi
-      umount /mnt/cidata
 """.rstrip()
 if os.environ["USE_LOCAL_STACK"] == "1":
     if clone not in text:
@@ -126,30 +148,20 @@ PY
 if [ "$USE_LOCAL_STACK" = "1" ]; then
   log "packing the exact local ipc-stack working tree"
   tar -C "$STACK_DIR" -czf "$stage/ipc-stack.tar.gz" \
-    --exclude=.git --exclude=.env --exclude=.env.dev --exclude=.watch-sim-deps.pid \
-    --exclude='*.pid' --exclude='__pycache__' --exclude='*.pyc' .
+    --exclude=.git --exclude=.env --exclude=.env.dev \
+    --exclude=.secrets --exclude=seed --exclude=storage \
+    --exclude=.watch-sim-deps.pid --exclude=.watch-sim-deps.lock \
+    --exclude='seed.env' --exclude='operator.env' --exclude='tailscale.env' \
+    --exclude='*.pid' --exclude='__pycache__' --exclude='*.pyc' \
+    --exclude='.pytest_cache' --exclude='.ruff_cache' --exclude='.venv' .
 else
-  # Keep the CIDATA layout stable; stock user-data ignores this empty archive.
+  # Keep the embedded NoCloud layout stable; production ignores this archive.
   tar -czf "$stage/ipc-stack.tar.gz" --files-from /dev/null
 fi
 
 log "preparing ISO tools"
 docker build -q -t "$ISO_TOOLS_IMAGE" -f "$STACK_DIR/provision/hyperv/iso-tools.Dockerfile" \
   "$STACK_DIR/provision/hyperv" >/dev/null
-
-log "building CIDATA seed ISO"
-docker run --rm \
-  --user "$(id -u):$(id -g)" -e HOME=/tmp \
-  -v "$stage:/src:ro" -v "$OUTPUT_DIR:/out" \
-  "$ISO_TOOLS_IMAGE" sh -ec '
-    xorriso -as mkisofs -quiet -volid CIDATA -joliet -rock -graft-points \
-      -output /out/cidata.iso \
-      user-data=/src/user-data \
-      meta-data=/src/meta-data \
-      seed.env=/src/seed.env \
-      ipc-stack.tar.gz=/src/ipc-stack.tar.gz \
-      images=/src/images
-  '
 
 log "extracting and updating Ubuntu GRUB configuration"
 docker run --rm \
@@ -169,7 +181,7 @@ lines = []
 changed = 0
 for line in path.read_text().splitlines():
     if "linux" in line and "/casper/vmlinuz" in line and "autoinstall" not in line:
-        line = line.replace(" ---", " autoinstall ---")
+        line = line.replace(" ---", r" autoinstall ds=nocloud\;s=/cdrom/nocloud/ ---")
         changed += 1
     lines.append(line)
 if not changed:
@@ -185,10 +197,14 @@ docker run --rm \
     rm -f /out/ubuntu-ipc-autoinstall.iso
     xorriso -indev /work/base.iso -outdev /out/ubuntu-ipc-autoinstall.iso \
       -boot_image any replay \
-      -map /work/stage/grub.cfg /boot/grub/grub.cfg >/dev/null 2>&1
+      -map /work/stage/grub.cfg /boot/grub/grub.cfg \
+      -map /work/stage/user-data /nocloud/user-data \
+      -map /work/stage/meta-data /nocloud/meta-data \
+      -map /work/stage/seed.env /nocloud/seed.env \
+      -map /work/stage/ipc-stack.tar.gz /nocloud/ipc-stack.tar.gz \
+      -map /work/stage/images /nocloud/images >/dev/null 2>&1
   '
 
-chmod 0600 "$OUTPUT_DIR/cidata.iso"
+chmod 0600 "$OUTPUT_DIR/ubuntu-ipc-autoinstall.iso"
 log "media ready: $OUTPUT_DIR/ubuntu-ipc-autoinstall.iso"
-log "media ready: $OUTPUT_DIR/cidata.iso"
-log "operator SSH key: $SSH_KEY"
+log "operator SSH public key embedded"

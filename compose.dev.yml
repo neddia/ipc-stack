@@ -62,6 +62,7 @@ services:
       SITE_PROFILES_DIR: /app/storage/site-profiles
     volumes:
       - ${SETPOINT_DIR:-../setpoint}/site-agent:/app/site-agent
+      - ${SETPOINT_DIR:-../setpoint}/gatewayd:/app/gatewayd:ro
       - ${SETPOINT_DIR:-../setpoint}/ticlib:/app/ticlib
       - ${SETPOINT_DIR:-../setpoint}/profiles:/app/profiles:ro
     depends_on:
