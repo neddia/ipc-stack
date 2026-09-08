@@ -290,6 +290,12 @@ if [ "${TAILSCALE_SSH_ONLY:-0}" = "1" ]; then
 fi
 
 log "install complete"
+if [ "$STACK_DIR" = '/opt/ipc-stack' ]; then
+  install -m 0644 "$STACK_DIR/provision/firstboot/ipc-replacement.service" /etc/systemd/system/ipc-replacement.service
+  install -m 0644 "$STACK_DIR/provision/firstboot/ipc-replacement.timer" /etc/systemd/system/ipc-replacement.timer
+  systemctl daemon-reload
+  systemctl enable --now ipc-replacement.timer
+fi
 if [ -z "${TS_AUTHKEY:-}" ] && [ "${SKIP_TAILSCALE:-0}" != "1" ]; then
   log "if Tailscale prompted above, complete the browser login to finish tailnet enrollment"
 fi

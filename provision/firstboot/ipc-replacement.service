@@ -1,0 +1,10 @@
+[Unit]
+Description=Resume an approved IPC hardware replacement
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/ipc-stack/scripts/replacement-supervisor.py
+TimeoutStartSec=12min

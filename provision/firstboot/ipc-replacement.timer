@@ -1,0 +1,11 @@
+[Unit]
+Description=Check for approved IPC replacement work
+
+[Timer]
+OnBootSec=45s
+OnUnitInactiveSec=30s
+AccuracySec=5s
+Unit=ipc-replacement.service
+
+[Install]
+WantedBy=timers.target

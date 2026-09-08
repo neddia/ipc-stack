@@ -133,6 +133,12 @@ set -a
 source "$ENV_FILE"
 set +a
 
+# Never roll back to images without commissioning-hold support mid-swap.
+replacement_state="${IPC_STORAGE_DIR:-/opt/site-agent/storage}/ipc/replacement.json"
+if [ -f "$replacement_state" ]; then
+  python3 -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get("phase") == "active" else "Finish or resolve hardware replacement before updating images")' "$replacement_state"
+fi
+
 if [ $# -ge 1 ]; then
   set_release "$1"
 fi
@@ -178,3 +184,9 @@ prune_image_tags "${GATEWAYD_IMAGE:-}" "${GATEWAYD_VERSION:-latest}" "${GATEWAYD
 docker image prune -f >/dev/null || true
 
 log "update complete"
+if [ "$STACK_DIR" = '/opt/ipc-stack' ]; then
+  install -m 0644 "$STACK_DIR/provision/firstboot/ipc-replacement.service" /etc/systemd/system/ipc-replacement.service
+  install -m 0644 "$STACK_DIR/provision/firstboot/ipc-replacement.timer" /etc/systemd/system/ipc-replacement.timer
+  systemctl daemon-reload
+  systemctl enable --now ipc-replacement.timer
+fi
