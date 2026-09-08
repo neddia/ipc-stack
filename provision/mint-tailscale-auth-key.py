@@ -66,7 +66,7 @@ key_response = post_json(
                 "tags": tags,
             }}},
             "expirySeconds": 86400,
-            "description": f"Toops provisioning: {hostname}",
+            "description": f"Toops provisioning {hostname}",
         }
     ).encode(),
     {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},

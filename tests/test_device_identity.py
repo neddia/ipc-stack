@@ -81,6 +81,12 @@ class DeviceIdentityTests(unittest.TestCase):
         (self.storage / 'ipc/hardware.json').write_text('{}')
         with self.assertRaises(ValueError): self.ensure()
 
+    def test_host_health_before_first_boot_does_not_imply_identity(self):
+        (self.storage / 'ipc').mkdir(parents=True)
+        (self.storage / 'ipc/host-status.json').write_text('{}')
+        self.ensure()
+        self.assertTrue((self.secrets / 'ipc_ed25519').exists())
+
     def test_ticket_install_is_idempotent_and_holds_only_unpaired(self):
         self.ensure()
         ticket = {'cloud_url': 'https://cloud.example', 'token': 'test-only'}

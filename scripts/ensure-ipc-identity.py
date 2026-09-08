@@ -48,7 +48,10 @@ def ensure(secrets_dir, storage, *, validate_only=False):
         if previous and previous['host_identity']!=host:
             raise ValueError('Identity belongs to another host; do not clone enrolled disks')
         if not private.exists():
-            if validate_only or public.exists() or metadata.exists() or any((storage/'ipc').glob('*')):
+            # Host hardening publishes health before first device-key generation.
+            # Only that known non-identity file is safe to ignore on a blank IPC.
+            identity_state = any(p.name != 'host-status.json' for p in (storage/'ipc').glob('*'))
+            if validate_only or public.exists() or metadata.exists() or identity_state:
                 raise ValueError('Private device key missing; restore original credentials, do not regenerate')
             temporary=Path(tempfile.mkdtemp(prefix='ipc-key-',dir=root))
             try:

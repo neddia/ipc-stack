@@ -123,9 +123,9 @@ ensure_privsep_dir() {
 ensure_sshd_after_tailscale() {
   # On Ubuntu, OpenSSH is commonly "ssh.service". Some distros use sshd.service.
   local unit=""
-  if systemctl list-unit-files | awk '{print $1}' | grep -qx "ssh.service"; then
+  if [[ "$(systemctl show ssh.service -p LoadState --value 2>/dev/null)" == "loaded" ]]; then
     unit="ssh.service"
-  elif systemctl list-unit-files | awk '{print $1}' | grep -qx "sshd.service"; then
+  elif [[ "$(systemctl show sshd.service -p LoadState --value 2>/dev/null)" == "loaded" ]]; then
     unit="sshd.service"
   else
     # still allow validation; user may be using socket activation or custom.
@@ -156,11 +156,11 @@ validate_and_restart_sshd() {
   fi
 
   # Restart whichever service exists.
-  if systemctl list-unit-files | awk '{print $1}' | grep -qx "ssh.service"; then
+  if [[ "$(systemctl show ssh.service -p LoadState --value 2>/dev/null)" == "loaded" ]]; then
     systemctl enable --now ssh >/dev/null 2>&1 || true
     systemctl restart ssh
     systemctl --no-pager --full status ssh || true
-  elif systemctl list-unit-files | awk '{print $1}' | grep -qx "sshd.service"; then
+  elif [[ "$(systemctl show sshd.service -p LoadState --value 2>/dev/null)" == "loaded" ]]; then
     systemctl enable --now sshd >/dev/null 2>&1 || true
     systemctl restart sshd
     systemctl --no-pager --full status sshd || true
@@ -195,7 +195,10 @@ configure_ufw() {
 
   # Ensure the allow-on-tailscale rule is evaluated before any deny 22 rule.
   # "insert 1" places it at the top.
-  ufw insert 1 allow in on "$TS_IF" to any port "$SSH_PORT" proto tcp >/dev/null 2>&1 || true
+  # UFW cannot insert into an empty ruleset; create its first rule instead.
+  # Never silently suppress failure of the rule that preserves ops access.
+  ufw insert 1 allow in on "$TS_IF" to any port "$SSH_PORT" proto tcp >/dev/null 2>&1 \
+    || ufw allow in on "$TS_IF" to any port "$SSH_PORT" proto tcp >/dev/null
 
   if [[ "$ALLOW_LAN_SSH" == "1" ]]; then
     ufw allow from "$LAN_CIDR" to any port "$SSH_PORT" proto tcp >/dev/null 2>&1 || true
