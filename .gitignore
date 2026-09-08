@@ -11,3 +11,5 @@ storage/
 seed.env
 operator.env
 tailscale.env
+.cloud-enrollment/
+cloud-enrollment.json

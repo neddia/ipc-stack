@@ -56,6 +56,7 @@ autoinstall:
 
     # 2) Copy the embedded, per-device seed root-only.
     - install -m 0600 -o root -g root /cdrom/nocloud/seed.env /target/opt/ipc-stack/seed.env
+    - if [ -f /cdrom/nocloud/enrollment/cloud-enrollment.json ]; then install -m 0600 -o root -g root /cdrom/nocloud/enrollment/cloud-enrollment.json /target/opt/ipc-stack/cloud-enrollment.json; fi
 
     # 3) Install + enable the first-boot bring-up unit.
     - cp /target/opt/ipc-stack/provision/firstboot/ipc-firstboot.sh /target/usr/local/sbin/ipc-firstboot.sh

@@ -10,6 +10,7 @@ OUTPUT_DIR="${IPC_E2E_MEDIA_DIR:-$CACHE_DIR/media}"
 HOSTNAME="${IPC_E2E_HOSTNAME:-ipc-e2e-x86-01}"
 SEED_FILE="$PRIVATE_DIR/seed.env"
 TAILSCALE_ENV_FILE="${IPC_E2E_TAILSCALE_ENV_FILE:-$PRIVATE_DIR/tailscale.env}"
+CLOUD_ENROLLMENT_CONFIG="${IPC_E2E_CLOUD_ENROLLMENT_CONFIG:-$PRIVATE_DIR/cloud-enrollment.json}"
 SSH_KEY="$PRIVATE_DIR/id_ed25519"
 SSH_PUBLIC_KEY="${IPC_E2E_SSH_PUBLIC_KEY:-$SSH_KEY.pub}"
 CONSOLE_PASSWORD_FILE="$PRIVATE_DIR/console-password"
@@ -48,6 +49,12 @@ trap 'rm -rf "$stage"' EXIT
 cp "$STACK_DIR/provision/autoinstall/user-data" "$stage/user-data"
 cp "$STACK_DIR/provision/autoinstall/meta-data" "$stage/meta-data"
 cp "$SEED_FILE" "$stage/seed.env"
+mkdir -p "$stage/enrollment"
+if [ "${IPC_E2E_SKIP_CLOUD_ENROLLMENT:-0}" != "1" ]; then
+  [ -s "$CLOUD_ENROLLMENT_CONFIG" ] || die "download installer authorization from Cloud Platform to $CLOUD_ENROLLMENT_CONFIG (mode 600)"
+  log "preparing single-use cloud enrollment for $HOSTNAME"
+  python3 "$STACK_DIR/provision/create-enrollment-ticket.py" --config "$CLOUD_ENROLLMENT_CONFIG" --output "$stage/enrollment/cloud-enrollment.json" --name "$HOSTNAME"
+fi
 
 set_seed_values() {
   SEED_STAGE="$stage/seed.env" SEED_VALUES="$1" python3 - <<'PY'
@@ -93,7 +100,9 @@ else
   log "using the manually supplied Tailscale auth key from the private seed"
 fi
 
-if [ -n "${IPC_E2E_CLOUD_BASE_URL:-}" ]; then
+if [ -s "$stage/enrollment/cloud-enrollment.json" ]; then
+  set_seed_values "$(python3 -c 'import json,os,sys; u=json.load(open(sys.argv[1]))["cloud_url"]; override=os.environ.get("IPC_E2E_CLOUD_BASE_URL",u).rstrip("/"); assert override==u, "Cloud override conflicts with installer authorization"; print(json.dumps({"CLOUD_BASE_URL":u,"CLOUD_PUBLIC_BASE_URL":u}))' "$stage/enrollment/cloud-enrollment.json")"
+elif [ -n "${IPC_E2E_CLOUD_BASE_URL:-}" ]; then
   set_seed_values "$(python3 -c 'import json,os; print(json.dumps({"CLOUD_BASE_URL": os.environ["IPC_E2E_CLOUD_BASE_URL"], "CLOUD_PUBLIC_BASE_URL": os.environ["IPC_E2E_CLOUD_BASE_URL"]}))')"
 fi
 
@@ -151,7 +160,7 @@ if [ "$USE_LOCAL_STACK" = "1" ]; then
     --exclude=.git --exclude=.env --exclude=.env.dev \
     --exclude=.secrets --exclude=seed --exclude=storage \
     --exclude=.watch-sim-deps.pid --exclude=.watch-sim-deps.lock \
-    --exclude='seed.env' --exclude='operator.env' --exclude='tailscale.env' \
+    --exclude='seed.env' --exclude='operator.env' --exclude='tailscale.env' --exclude='cloud-enrollment.json' \
     --exclude='*.pid' --exclude='__pycache__' --exclude='*.pyc' \
     --exclude='.pytest_cache' --exclude='.ruff_cache' --exclude='.venv' .
 else
@@ -201,6 +210,7 @@ docker run --rm \
       -map /work/stage/user-data /nocloud/user-data \
       -map /work/stage/meta-data /nocloud/meta-data \
       -map /work/stage/seed.env /nocloud/seed.env \
+      -map /work/stage/enrollment /nocloud/enrollment \
       -map /work/stage/ipc-stack.tar.gz /nocloud/ipc-stack.tar.gz \
       -map /work/stage/images /nocloud/images >/dev/null 2>&1
   '

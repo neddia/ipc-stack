@@ -83,5 +83,8 @@ log "install healthy; finalizing"
 if [ -f "$SEED_FILE" ]; then
   shred -u "$SEED_FILE" 2>/dev/null || rm -f "$SEED_FILE"
 fi
+if [ -f "$STACK_DIR/cloud-enrollment.json" ]; then
+  shred -u "$STACK_DIR/cloud-enrollment.json" 2>/dev/null || rm -f "$STACK_DIR/cloud-enrollment.json"
+fi
 touch "$DONE_FILE"
 log "first-boot provisioning complete"

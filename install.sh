@@ -275,6 +275,7 @@ else
   log "using preloaded images; registry pull skipped"
 fi
 "$STACK_DIR/scripts/sync-defaults.sh" --env-file "$ENV_FILE"
+python3 "$STACK_DIR/scripts/install-enrollment.py" --stack "$STACK_DIR" --secrets "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}" --storage "$STORAGE_DIR" --cloud "${CLOUD_BASE_URL:-}"
 
 log "starting influx"
 docker compose up -d influxdb

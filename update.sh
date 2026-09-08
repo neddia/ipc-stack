@@ -134,6 +134,7 @@ source "$ENV_FILE"
 set +a
 
 # Never roll back to images without commissioning-hold support mid-swap.
+python3 "$STACK_DIR/scripts/ensure-ipc-identity.py" --validate-only --secrets "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}" --storage "${IPC_STORAGE_DIR:-/opt/site-agent/storage}"
 replacement_state="${IPC_STORAGE_DIR:-/opt/site-agent/storage}/ipc/replacement.json"
 if [ -f "$replacement_state" ]; then
   python3 -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get("phase") == "active" else "Finish or resolve hardware replacement before updating images")' "$replacement_state"

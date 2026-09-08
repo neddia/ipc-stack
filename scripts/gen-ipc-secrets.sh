@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 STACK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SECRETS_DIR="${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}"
@@ -47,17 +48,7 @@ write_secret "$SECRETS_DIR/gatewayd.token" "$(rand)"
 
 KEY_PATH="$SECRETS_DIR/ipc_ed25519"
 PUB_PATH="$SECRETS_DIR/ipc_ed25519.pub"
-if [ -s "$KEY_PATH" ] && [ ! -s "$PUB_PATH" ] && command -v ssh-keygen >/dev/null 2>&1; then
-  ssh-keygen -y -f "$KEY_PATH" > "$PUB_PATH"
-fi
-if [ ! -s "$KEY_PATH" ]; then
-  if ! command -v ssh-keygen >/dev/null 2>&1; then
-    echo "[ipc] warning: ssh-keygen not found; skipping IPC keypair" >&2
-  else
-    rm -f "$KEY_PATH" "$PUB_PATH"
-    ssh-keygen -t ed25519 -N "" -C "ipc" -f "$KEY_PATH" >/dev/null 2>&1
-  fi
-fi
+python3 "$STACK_DIR/scripts/ensure-ipc-identity.py" --secrets "$SECRETS_DIR" --storage "${IPC_STORAGE_DIR:-/opt/site-agent/storage}"
 if [ -s "$KEY_PATH" ] && [ -s "$PUB_PATH" ]; then
   chmod 600 "$KEY_PATH" || true
   chmod 644 "$PUB_PATH" || true
