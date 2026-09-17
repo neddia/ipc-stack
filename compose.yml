@@ -27,6 +27,8 @@ services:
     env_file:
       - ${ENV_FILE:-./.env}
     environment:
+      # Explicitly opt in: PID 1 exits gracefully; restart policy brings it back.
+      SITE_AGENT_RESTART_MODE: container
       INFLUX_URL: ${INFLUX_URL:-http://influxdb:8086}
       INFLUX_ORG: ${INFLUX_ORG:-edge-org}
       INFLUX_BUCKET: ${INFLUX_BUCKET:-edge-site}
