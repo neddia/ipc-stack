@@ -43,22 +43,6 @@ services:
     ports:
       - "${SITE_AGENT_BIND_HOST:-0.0.0.0}:${SITE_AGENT_HOST_PORT:-8000}:8000"
 
-  gatewayd:
-    image: ${GATEWAYD_IMAGE:-ghcr.io/neddia/gatewayd}:${GATEWAYD_VERSION:-latest}
-    restart: unless-stopped
-    env_file:
-      - ${ENV_FILE:-./.env}
-    environment:
-      SITE_CONFIG_PATH: /data/site-config.yml
-      GATEWAYD_BUILTIN_PROFILES_DIR: /app/profiles
-      GATEWAYD_SITE_PROFILES_DIR: /data/site-profiles
-    depends_on:
-      - influxdb
-    volumes:
-      - ${IPC_STORAGE_DIR:-/opt/site-agent/storage}:/data
-    ports:
-      - "${GATEWAYD_BIND_HOST:-127.0.0.1}:${GATEWAYD_HOST_PORT:-8080}:8080"
-
   telegraf:
     image: telegraf:1.29
     user: "0:0"

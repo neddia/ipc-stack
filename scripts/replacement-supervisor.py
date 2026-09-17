@@ -36,7 +36,7 @@ class Supervisor:
             if host in {'','0.0.0.0'}:
                 host = '127.0.0.1'
             return 'http://' + host + ':' + self.env.get(prefix+'_HOST_PORT',default_port) + path
-        urls = [address('SITE_AGENT','8000','/recovery/ready'), address('GATEWAYD','8080','/readyz')]
+        urls = [address('SITE_AGENT','8000','/recovery/ready')]
         deadline = time.monotonic() + 60
         while time.monotonic() < deadline:
             try:
@@ -68,10 +68,10 @@ class Supervisor:
                 return  # Existing installations retain autonomous behavior.
             phase = self.worker('stage')['phase']
         if phase == 'staged':
-            self.run(['stop','site-agent','gatewayd'])
+            self.run(['stop','site-agent'])
             phase = self.worker('apply')['phase']
         if phase == 'restored':
-            self.run(['up','-d','gatewayd','site-agent'])
+            self.run(['up','-d','site-agent'])
             self.healthy(held=True)
             phase = self.worker('activate')['phase']
         if phase == 'activated':
@@ -80,8 +80,8 @@ class Supervisor:
         if phase == 'active' and not info.get('finished'):
             # Idempotent after a crash anywhere between release/start/finish.
             if not info.get('started'):
-                self.run(['up','-d','gatewayd','site-agent'])
-                self.run(['restart','gatewayd','site-agent'])
+                self.run(['up','-d','site-agent'])
+                self.run(['restart','site-agent'])
                 self.healthy(held=False)
                 self.worker('started')
             self.worker('finish')

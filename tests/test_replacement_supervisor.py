@@ -35,7 +35,7 @@ class TestSupervisor(unittest.TestCase):
                 runner.tick()
                 self.assertTrue(state['finished'])
                 if phase in {'idle','staged'}:
-                    self.assertLess(events.index(('stop','site-agent','gatewayd')),events.index('apply'))
+                    self.assertLess(events.index(('stop','site-agent')),events.index('apply'))
                     self.assertLess(events.index('apply'),events.index(('healthy',True)))
                 if 'activate' in events:
                     self.assertLess(events.index(('healthy',True)),events.index('activate'))

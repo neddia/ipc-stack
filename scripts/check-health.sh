@@ -12,8 +12,6 @@ Usage: check-health.sh [--env-file PATH] [--timeout SECONDS]
 Checks that the IPC stack is running and that the key HTTP endpoints respond:
 - InfluxDB     http://127.0.0.1:8086/health
 - Telegraf     a cpu-total point written within the last 2 minutes
-- gatewayd     http://127.0.0.1:8080/healthz
-- gatewayd     http://127.0.0.1:8080/readyz
 - site-agent   http://127.0.0.1:8000/ui/settings/status
 EOF
 }
@@ -62,12 +60,9 @@ health_host() {
 }
 
 INFLUX_HEALTH_HOST="$(health_host "${INFLUX_BIND_HOST:-127.0.0.1}")"
-GATEWAYD_HEALTH_HOST="$(health_host "${GATEWAYD_BIND_HOST:-127.0.0.1}")"
 SITE_AGENT_HEALTH_HOST="$(health_host "${SITE_AGENT_BIND_HOST:-127.0.0.1}")"
 INFLUX_HEALTH_URL="${INFLUX_HEALTH_URL:-http://${INFLUX_HEALTH_HOST}:${INFLUX_HOST_PORT:-8086}/health}"
 INFLUX_API_URL="${INFLUX_API_URL:-${INFLUX_HEALTH_URL%/health}}"
-GATEWAYD_HEALTH_URL="${GATEWAYD_HEALTH_URL:-http://${GATEWAYD_HEALTH_HOST}:${GATEWAYD_HOST_PORT:-8080}/healthz}"
-GATEWAYD_READY_URL="${GATEWAYD_READY_URL:-http://${GATEWAYD_HEALTH_HOST}:${GATEWAYD_HOST_PORT:-8080}/readyz}"
 SITE_AGENT_HEALTH_URL="${SITE_AGENT_HEALTH_URL:-http://${SITE_AGENT_HEALTH_HOST}:${SITE_AGENT_HOST_PORT:-8000}/ui/settings/status}"
 if [ -f "${IPC_STORAGE_DIR:-/opt/site-agent/storage}/ipc/enrollment-hold.json" ]; then
   SITE_AGENT_HEALTH_URL="http://${SITE_AGENT_HEALTH_HOST}:${SITE_AGENT_HOST_PORT:-8000}/recovery/ready"
@@ -80,7 +75,7 @@ TELEGRAF_BUCKET="${TELEGRAF_BUCKET:-telegraf}"
 compose_services_running() {
   local running
   running="$(docker compose -f "$STACK_DIR/compose.yml" --env-file "$ENV_FILE" ps --services --status running 2>/dev/null || true)"
-  for svc in influxdb site-agent gatewayd telegraf; do
+  for svc in influxdb site-agent telegraf; do
     if ! grep -qx "$svc" <<<"$running"; then
       echo "service_not_running:$svc"
       return 1
@@ -137,14 +132,6 @@ while [ "$SECONDS" -lt "$deadline" ]; do
     continue
   fi
   if ! last_err="$(check_telegraf_freshness)"; then
-    sleep 2
-    continue
-  fi
-  if ! last_err="$(check_endpoint gatewayd_health "$GATEWAYD_HEALTH_URL" '"ok"[[:space:]]*:[[:space:]]*true')"; then
-    sleep 2
-    continue
-  fi
-  if ! last_err="$(check_endpoint gatewayd_ready "$GATEWAYD_READY_URL" '"ok"[[:space:]]*:[[:space:]]*true')"; then
     sleep 2
     continue
   fi
