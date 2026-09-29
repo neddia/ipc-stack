@@ -13,3 +13,4 @@ operator.env
 tailscale.env
 .cloud-enrollment/
 cloud-enrollment.json
+__pycache__/

@@ -1,0 +1,10 @@
+[Unit]
+Description=Re-apply Toops support access after boot and Cloud gateway changes
+
+[Timer]
+OnBootSec=30s
+OnUnitInactiveSec=10min
+Unit=ipc-support-access.service
+
+[Install]
+WantedBy=timers.target

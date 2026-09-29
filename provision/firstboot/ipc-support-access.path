@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch the site dashboard's Toops support access request
+
+[Path]
+PathChanged=/opt/site-agent/storage/ipc/support-access-request.json
+Unit=ipc-support-access.service
+
+[Install]
+WantedBy=multi-user.target

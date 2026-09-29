@@ -1,6 +1,6 @@
 # Preparing a shelf spare
 
-This requires compatible setpoint site-agent and gatewayd images, cloud migrations through `048_device_enrollment.sql` and enrollment/replacement API/UI. See `~/setpoint/docs/hardware-replacement.md` for restored/excluded data and the state machine.
+This requires a compatible Setpoint site-agent image, cloud migrations through `048_device_enrollment.sql` and enrollment/replacement API/UI. See `~/setpoint/docs/reference/hardware-replacement.md` for restored/excluded data and the state machine.
 
 1. Install/bench-boot the appliance normally at `/opt/ipc-stack`. Finish Tailscale enrollment while its enrollment auth key is valid. Verify its node stays enrolled after reboot and its node-key expiry policy is appropriate for an unattended tagged device. Each physical box needs its own appliance key, Tailscale identity and local service secrets.
 2. Bench-test the software/network. Before shelving, leave the install-safe empty site configuration and **no cloud IPC pairing**. Never shelve a cloned controller disk or a test config that will command drives on startup.

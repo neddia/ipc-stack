@@ -46,17 +46,6 @@ ensure_timesync() {
   systemctl enable --now systemd-timesyncd || true
 }
 
-limit_journal() {
-  log "setting journald size limits"
-  mkdir -p /etc/systemd/journald.conf.d
-  cat >/etc/systemd/journald.conf.d/size-limit.conf <<'CONF'
-[Journal]
-SystemMaxUse=200M
-SystemMaxFileSize=50M
-RuntimeMaxUse=100M
-CONF
-  systemctl restart systemd-journald || true
-}
 
 security_updates() {
   log "enabling unattended-upgrades (security only)"
@@ -81,23 +70,8 @@ enable_tailscale() {
 }
 
 docker_log_limits() {
-  log "ensuring docker log caps"
-  mkdir -p /etc/docker
-  if [ ! -f /etc/docker/daemon.json ]; then
-    cat >/etc/docker/daemon.json <<'CONF'
-{
-  "log-driver": "json-file",
-  "log-opts": {
-    "max-size": "20m",
-    "max-file": "5"
-  },
-  "live-restore": true
-}
-CONF
-    systemctl restart docker || true
-  else
-    log "/etc/docker/daemon.json exists; leaving unchanged"
-  fi
+  # Containers log to a persistent, capped journal so logs outlive updates and rollbacks.
+  "$(dirname "$0")/configure-logging.sh" >/dev/null
 }
 
 install_host_state_timer() {
@@ -145,7 +119,6 @@ EOF
 
 disable_sleep
 ensure_timesync
-limit_journal
 security_updates
 enable_tailscale
 docker_log_limits

@@ -14,8 +14,20 @@ switch_ip="$(powershell.exe -NoProfile -NonInteractive -Command \
 IPC_E2E_CLOUD_BASE_URL="http://${switch_ip}:18001" \
 IPC_E2E_IMAGE_DIR="$HOME/.cache/toops-e2e/images" \
 IPC_E2E_IMAGE_TAG=e2e-local-<commit> \
+IPC_E2E_CONFIRM_ERASE=0 \
   ./provision/hyperv/build-media.sh
 ```
+
+`IPC_E2E_CONFIRM_ERASE=0` keeps the VM run fully unattended. Customer media
+leaves it at the default, so the installer asks for a typed `yes` before
+erasing the disk.
+
+The preloaded application archive is `site-agent-<tag>.tar.gz` in
+`IPC_E2E_IMAGE_DIR`; export it from the image named by `SITE_AGENT_IMAGE` with
+the same tag. The builder pins that tag in the staged seed and embeds the one
+application archive. InfluxDB, Telegraf, OS packages, Tailscale and cloud
+enrollment still need network access; preloading the application image does not
+make the entire installation offline.
 
 The cloud API remains loopback-only. For a VM test, expose it only on the
 Hyper-V Default Switch:

@@ -10,6 +10,8 @@ STACK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$STACK_DIR/.env"
 
 log() { echo "[ipc-install] $*"; }
+# shellcheck source=scripts/release-registry.sh
+source "$STACK_DIR/scripts/release-registry.sh"
 
 persist_env_var() {
   local file="$1"
@@ -61,67 +63,88 @@ install_tailscale() {
   curl -fsSL https://tailscale.com/install.sh | sh
 }
 
+tailscale_state() {
+  tailscale status --json 2>/dev/null \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin).get("BackendState",""))' 2>/dev/null || true
+}
+
+console_status() {
+  # Shown above the console login prompt, where a customer installing on their
+  # own hardware will look. An empty message clears it.
+  local issue="${IPC_CONSOLE_ISSUE_FILE:-/etc/issue.d/toops-ipc.issue}"
+  if [ -n "$1" ]; then
+    mkdir -p "$(dirname "$issue")"
+    printf '\n%s\n\n' "$1" >"$issue"
+  else
+    rm -f "$issue"
+  fi
+  agetty --reload >/dev/null 2>&1 || true
+}
+
+wait_for_tailnet_approval() {
+  # With device approval enabled on the tailnet, a new node joins but stays
+  # unusable until an operator approves it. Wait as long as that takes.
+  local state notified=0 unsettled=0
+  while :; do
+    state="$(tailscale_state)"
+    case "$state" in
+      Running)
+        [ "$notified" = "0" ] || log "tailnet approval received"
+        console_status ""
+        return 0
+        ;;
+      NeedsMachineAuth)
+        if [ "$notified" = "0" ]; then
+          notified=1
+          log "waiting for an operator to approve this device in the Tailscale admin console"
+          console_status "Toops controller setup: waiting for Toops to approve this device.
+Leave it powered on and connected; setup continues automatically."
+        fi
+        ;;
+      Starting|"")
+        unsettled=$((unsettled + 1))
+        if [ "$unsettled" -gt "${TAILSCALE_SETTLE_POLLS:-40}" ]; then
+          echo "Tailscale did not settle (state: ${state:-unavailable})" >&2
+          return 1
+        fi
+        ;;
+      *)
+        console_status ""
+        echo "Tailscale did not log in (state: ${state}); check the provisioning auth key" >&2
+        return 1
+        ;;
+    esac
+    sleep "${TAILSCALE_APPROVAL_POLL_SECONDS:-15}"
+  done
+}
+
 tailscale_up() {
   if ! command -v tailscale >/dev/null 2>&1; then
     return
   fi
-  if tailscale status >/dev/null 2>&1; then
-    return
-  fi
+  case "$(tailscale_state)" in
+    Running|NeedsMachineAuth)
+      wait_for_tailnet_approval
+      return
+      ;;
+  esac
   local tags="${TS_TAGS:-tag:ipc}"
   local hostname="${TS_HOSTNAME:-}"
   # Tailscale supplies the private transport. The host's normal OpenSSH
   # daemon remains the deliberately separate, key-only login layer.
   local args=(--advertise-tags "$tags")
-  if [ -n "${TS_AUTHKEY:-}" ]; then
-    args=(--authkey "$TS_AUTHKEY" "${args[@]}")
-  fi
   if [ -n "$hostname" ]; then
     args+=(--hostname "$hostname")
   fi
   log "running tailscale up --advertise-tags=$tags"
-  tailscale up "${args[@]}"
-}
-
-docker_login_ghcr() {
-  local docker_cfg="${DOCKER_CONFIG:-/root/.docker}/config.json"
-  if [ -f "$docker_cfg" ] && grep -q '"ghcr.io"' "$docker_cfg"; then
-    return
+  if [ -n "${TS_AUTHKEY:-}" ]; then
+    # Do not block inside `tailscale up` while a device awaits approval; the
+    # approval wait below reports progress on the console instead.
+    tailscale up --authkey "$TS_AUTHKEY" "${args[@]}" --timeout=2m || true
+    wait_for_tailnet_approval
+  else
+    tailscale up "${args[@]}"
   fi
-
-  local default_user="${GHCR_USER:-}"
-  if [ -z "$default_user" ] && [ -n "${SITE_AGENT_IMAGE:-}" ]; then
-    default_user="${SITE_AGENT_IMAGE#ghcr.io/}"
-    default_user="${default_user%%/*}"
-  fi
-  if [ -z "$default_user" ]; then
-    default_user="neddia"
-  fi
-
-  if [ -z "${GHCR_TOKEN:-}" ]; then
-    if [ ! -t 0 ]; then
-      echo "GHCR_TOKEN not set and no TTY available. Set GHCR_USER/GHCR_TOKEN or login first." >&2
-      exit 1
-    fi
-    local input_user=""
-    read -r -p "GHCR user [$default_user]: " input_user
-    if [ -n "$input_user" ]; then
-      default_user="$input_user"
-    fi
-    read -r -s -p "GHCR token (read:packages): " GHCR_TOKEN
-    echo
-  fi
-
-  if [ -z "${GHCR_USER:-}" ]; then
-    GHCR_USER="$default_user"
-  fi
-  if [ -z "${GHCR_TOKEN:-}" ]; then
-    echo "GHCR token is empty; cannot login" >&2
-    exit 1
-  fi
-  log "logging into ghcr.io as $GHCR_USER"
-  echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-  unset GHCR_TOKEN
 }
 
 preload_images() {
@@ -223,16 +246,6 @@ preload_images
 IPC_SECRETS_DIR="${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}" "$STACK_DIR/scripts/gen-ipc-secrets.sh"
 ensure_user_owned "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}"
 
-# Use the per-site generated gatewayd token; never run with the old shared default.
-if [ -z "${GATEWAYD_TOKEN:-}" ] || [ "${GATEWAYD_TOKEN:-}" = "devtoken" ]; then
-  if [ -s "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}/gatewayd.token" ]; then
-    GATEWAYD_TOKEN="$(cat "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}/gatewayd.token")"
-    persist_env_var "$ENV_FILE" "GATEWAYD_TOKEN" "$GATEWAYD_TOKEN"
-    export GATEWAYD_TOKEN
-    log "set GATEWAYD_TOKEN from generated secret"
-  fi
-fi
-
 if [ ! -s "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}/cloud.license.ed25519.pub" ] && [ -s "$REPO_LICENSE_KEY" ]; then
   cp "$REPO_LICENSE_KEY" "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}/cloud.license.ed25519.pub"
   chmod 0644 "${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}/cloud.license.ed25519.pub" 2>/dev/null || true
@@ -264,7 +277,9 @@ if [ "${OPTIMIZER_LICENSE_POLICY:-required}" = "required" ] && [ -z "${CLOUD_LIC
 fi
 
 if [ "${SKIP_IMAGE_PULL:-0}" != "1" ]; then
-  docker_login_ghcr
+  prepare_release_registry pull
+else
+  prepare_release_registry
 fi
 
 log "starting IPC stack"
@@ -294,8 +309,19 @@ log "install complete"
 if [ "$STACK_DIR" = '/opt/ipc-stack' ]; then
   install -m 0644 "$STACK_DIR/provision/firstboot/ipc-replacement.service" /etc/systemd/system/ipc-replacement.service
   install -m 0644 "$STACK_DIR/provision/firstboot/ipc-replacement.timer" /etc/systemd/system/ipc-replacement.timer
+  install -m 0755 "$STACK_DIR/scripts/toops-support.sh" /usr/local/sbin/toops-support
+  for unit in ipc-support-access.service ipc-support-access.path ipc-support-access.timer; do
+    install -m 0644 "$STACK_DIR/provision/firstboot/$unit" "/etc/systemd/system/$unit"
+  done
   systemctl daemon-reload
   systemctl enable --now ipc-replacement.timer
+  # The customer's support-access switch ships dark: only a device with
+  # SUPPORT_ACCESS_TOGGLE=1 lets the dashboard drive the host lockout.
+  if [ "${SUPPORT_ACCESS_TOGGLE:-0}" = "1" ]; then
+    systemctl enable --now ipc-support-access.path ipc-support-access.timer
+  else
+    systemctl disable --now ipc-support-access.path ipc-support-access.timer >/dev/null 2>&1 || true
+  fi
 fi
 if [ -z "${TS_AUTHKEY:-}" ] && [ "${SKIP_TAILSCALE:-0}" != "1" ]; then
   log "if Tailscale prompted above, complete the browser login to finish tailnet enrollment"

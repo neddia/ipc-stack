@@ -42,6 +42,18 @@ if not client_id or not client_secret or not hostname:
 tags = [value.strip() for value in os.environ.get("TS_TAGS", "tag:ipc").split(",") if value.strip()]
 if not tags or any(not value.startswith("tag:") for value in tags):
     fail("TS_TAGS must be a comma-separated list of tag: values")
+# Keys are not pre-approved: with device approval enabled on the tailnet, a
+# node that uses one waits for an operator to approve it. Customer hardware may
+# not be installed the day its media is built, so keys last a week by default.
+preauthorized = os.environ.get("TS_PREAUTHORIZED", "0").strip() == "1"
+# Ephemeral nodes disappear once offline; for qualification runs only.
+ephemeral = os.environ.get("TS_EPHEMERAL", "0").strip() == "1"
+try:
+    expiry_seconds = int(os.environ.get("TS_AUTHKEY_EXPIRY_SECONDS", "604800"))
+except ValueError:
+    fail("TS_AUTHKEY_EXPIRY_SECONDS must be a whole number of seconds")
+if not 3600 <= expiry_seconds <= 90 * 86400:
+    fail("TS_AUTHKEY_EXPIRY_SECONDS must be between one hour and 90 days")
 api_base = os.environ.get("TS_API_BASE_URL", "https://api.tailscale.com").rstrip("/")
 basic = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
 oauth = post_json(
@@ -61,11 +73,11 @@ key_response = post_json(
         {
             "capabilities": {"devices": {"create": {
                 "reusable": False,
-                "ephemeral": False,
-                "preauthorized": True,
+                "ephemeral": ephemeral,
+                "preauthorized": preauthorized,
                 "tags": tags,
             }}},
-            "expirySeconds": 86400,
+            "expirySeconds": expiry_seconds,
             "description": f"Toops provisioning {hostname}",
         }
     ).encode(),

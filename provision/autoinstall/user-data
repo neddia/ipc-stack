@@ -8,9 +8,9 @@
 #                             physical-console password only)
 #   - ssh.authorized-keys   : your operator public key(s)
 #
-# Provisioning credentials (a one-time Tailscale key and read-only GHCR token)
-# are embedded by the media builder and consumed on first boot. They do not
-# belong in this reusable template.
+# The media builder fills these in and embeds a single-use Tailscale key, which
+# first boot consumes. No registry credential is embedded: releases come from
+# the tailnet-only mirror. Nothing secret belongs in this reusable template.
 autoinstall:
   version: 1
   locale: en_US.UTF-8
@@ -30,9 +30,15 @@ autoinstall:
     authorized-keys:
       - "ssh-ed25519 AAAA_CHANGEME_OPERATOR_KEY toops-ops"
 
+  # The appliance always takes the whole largest disk: no layout choice, so no
+  # dual boot beside it. Customer media asks "Continue with autoinstall?" on
+  # the console before anything is erased (build-media.sh leaves the
+  # `autoinstall` keyword off the kernel command line).
   storage:
     layout:
       name: direct
+      match:
+        size: largest
 
   packages:
     - git
