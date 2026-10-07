@@ -26,6 +26,8 @@ class CheckHealthTests(unittest.TestCase):
         self.restarts = self.root / 'restarts.json'
         self.status([{'startup_complete': True, 'startup_errors': []}])
         self.restart_counts([0])
+        self.equipment = self.root / 'equipment.json'
+        self.equipment.write_text(json.dumps([4]))
         self.fake('docker', r'''
 import json, os, pathlib, sys
 args = sys.argv[1:]
@@ -43,6 +45,11 @@ if url.endswith('/health'):
     print('{"status":"pass"}')
 elif '/api/v2/query' in url:
     print('#datatype,string\n,result,table,_time\n,_result,0,2026-01-01T00:00:00Z')
+elif url.endswith('/api/equipment/telemetry'):
+    online = next_value(os.environ['TEST_EQUIPMENT'])
+    if online is None:
+        sys.exit(7)
+    print(json.dumps({'fans': [{'driver': {'online': True}}] * online + [{'driver': {'online': False}}]}))
 elif url.endswith('/ui/service/status'):
     value = next_value(os.environ['TEST_STATUSES'])
     if value is None:
@@ -50,7 +57,8 @@ elif url.endswith('/ui/service/status'):
     print(json.dumps(value))
 ''')
         self.env = {'PATH': f'{self.bin}{os.pathsep}{os.defpath}', 'TEST_STATUSES': str(self.statuses),
-                    'TEST_RESTARTS': str(self.restarts), 'IPC_HEALTH_SOAK_POLL_S': '0'}
+                    'TEST_RESTARTS': str(self.restarts), 'TEST_EQUIPMENT': str(self.equipment),
+                    'IPC_HEALTH_SOAK_POLL_S': '0'}
 
     def fake(self, name, body):
         helper = '''#!/usr/bin/env python3
@@ -81,10 +89,13 @@ def next_value(path):
         self.assertEqual(result.returncode == 0, ok, result.stdout + result.stderr)
         return result
 
-    def baseline(self, errors, known=True):
+    def baseline(self, errors, known=True, drives=None):
         path = self.root / 'baseline.json'
-        path.write_text(json.dumps({'known': known, 'errors': errors}))
+        path.write_text(json.dumps({'known': known, 'errors': errors, 'drives_online': drives}))
         return str(path)
+
+    def equipment_sequence(self, values):
+        self.equipment.write_text(json.dumps(values))
 
     def test_waits_through_a_slow_start(self):
         self.status([None, None, None, {'startup_complete': True, 'startup_errors': []}])
@@ -119,11 +130,32 @@ def next_value(path):
         result = self.run_check('--soak', '5', ok=False)
         self.assertIn('site_agent_restarted_after_start', result.stderr)
 
-    def test_capture_records_running_release_errors(self):
+    def test_capture_records_running_release_errors_and_drives(self):
         self.status([{'startup_complete': True, 'startup_errors': ['VFD telemetry']}])
         target = self.root / 'captured.json'
         self.run_check('--capture-baseline', str(target))
-        self.assertEqual(json.loads(target.read_text()), {'known': True, 'errors': ['VFD telemetry']})
+        self.assertEqual(json.loads(target.read_text()), {'known': True, 'errors': ['VFD telemetry'], 'drives_online': 4})
+
+    def test_update_that_loses_every_drive_fails_after_soak(self):
+        self.equipment_sequence([0])
+        result = self.run_check('--baseline', self.baseline([], drives=4), '--soak', '1', ok=False)
+        self.assertIn('equipment_lost: 0 of 4 drives reachable', result.stderr)
+
+    def test_one_flaky_drive_of_four_is_tolerated(self):
+        self.equipment_sequence([3])
+        self.run_check('--baseline', self.baseline([], drives=4), '--soak', '1')
+
+    def test_brief_loss_that_recovers_is_not_a_failure(self):
+        self.equipment_sequence([0, 4])
+        self.run_check('--baseline', self.baseline([], drives=4), '--soak', '1')
+
+    def test_unreadable_equipment_is_not_counted_as_lost(self):
+        self.equipment_sequence([None])
+        self.run_check('--baseline', self.baseline([], drives=4), '--soak', '1')
+
+    def test_no_soak_skips_the_equipment_comparison(self):
+        self.equipment_sequence([0])
+        self.run_check('--baseline', self.baseline([], drives=4))
 
     def test_capture_of_unreachable_site_agent_is_unknown_and_never_fails(self):
         self.status([None])

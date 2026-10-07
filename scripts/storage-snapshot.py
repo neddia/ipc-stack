@@ -90,6 +90,22 @@ def snapshot(storage, label, keep):
     return target
 
 
+def forget_cloud_sync(path):
+    """Make a restored ledger report to the cloud as a new generation.
+
+    The snapshot predates rows the cloud has already received; its sequence
+    numbers would be reused for different rows. Same statement as setpoint's
+    app.services.ledger.store.forget_cloud_sync; other databases are untouched.
+    """
+    db = sqlite3.connect(path)
+    try:
+        if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='sync_state'").fetchone():
+            with db:
+                db.execute("DELETE FROM sync_state WHERE key = 'ledger:generation' OR key LIKE 'sync_cursor:%'")
+    finally:
+        db.close()
+
+
 def restore(storage, snap):
     manifest = json.loads((snap / 'manifest.json').read_text())
     for name in manifest['databases'] + manifest['items']:
@@ -103,6 +119,7 @@ def restore(storage, snap):
             Path(str(live) + sidecar).unlink(missing_ok=True)
         staged = storage / (name + '.restoring')
         shutil.copy2(snap / name, staged)
+        forget_cloud_sync(staged)
         match_owner(staged, owner)
         os.replace(staged, live)
     for name in manifest['items']:

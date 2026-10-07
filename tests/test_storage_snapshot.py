@@ -76,6 +76,20 @@ class StorageSnapshotTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             snap.restore(self.storage, target)
 
+    def test_restored_ledger_reports_to_cloud_as_a_new_generation(self):
+        # Rows synced after the snapshot would otherwise collide with reused sequence numbers.
+        self.db.execute('CREATE TABLE sync_state (key TEXT PRIMARY KEY, value TEXT)')
+        self.db.executemany('INSERT INTO sync_state VALUES (?, ?)', [
+            ('ledger:generation', 'g1'), ('ledger:started_s', '1.0'),
+            ('sync_cursor:comparison_statements', '7'), ('sync_projection:x', 'v2')])
+        self.db.commit()
+        target = snap.snapshot(self.storage, 'v1-to-v2', keep=2)
+        self.db.close()
+        snap.restore(self.storage, target)
+        with sqlite3.connect(self.storage / 'ledger.sqlite3') as db:
+            kept = dict(db.execute('SELECT key, value FROM sync_state'))
+        self.assertEqual(kept, {'ledger:started_s': '1.0', 'sync_projection:x': 'v2'})
+
 
 if __name__ == '__main__':
     unittest.main()

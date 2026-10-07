@@ -92,6 +92,7 @@ SITE_AGENT_BASE="http://${SITE_AGENT_HEALTH_HOST}:${SITE_AGENT_HOST_PORT:-8000}"
 INFLUX_HEALTH_URL="${INFLUX_HEALTH_URL:-http://${INFLUX_HEALTH_HOST}:${INFLUX_HOST_PORT:-8086}/health}"
 INFLUX_API_URL="${INFLUX_API_URL:-${INFLUX_HEALTH_URL%/health}}"
 SITE_AGENT_STATUS_URL="${SITE_AGENT_STATUS_URL:-$SITE_AGENT_BASE/ui/service/status}"
+SITE_AGENT_EQUIPMENT_URL="${SITE_AGENT_EQUIPMENT_URL:-$SITE_AGENT_BASE/api/equipment/telemetry}"
 ENROLLMENT_HOLD=0
 if [ -f "${IPC_STORAGE_DIR:-/opt/site-agent/storage}/ipc/enrollment-hold.json" ]; then
   ENROLLMENT_HOLD=1
@@ -105,11 +106,23 @@ compose() {
   docker compose -f "$STACK_DIR/compose.yml" --env-file "$ENV_FILE" "$@"
 }
 
+# Drives the controller can reach right now, or empty when it cannot say.
+drives_online() {
+  curl --connect-timeout 2 --max-time 5 -fsS "$SITE_AGENT_EQUIPMENT_URL" 2>/dev/null | python3 -c '
+import json, sys
+try:
+    fans = json.load(sys.stdin).get("fans") or []
+except ValueError:
+    sys.exit(0)
+print(sum(1 for fan in fans if isinstance(fan, dict) and (fan.get("driver") or {}).get("online") is True))
+' 2>/dev/null || true
+}
+
 if [ -n "$CAPTURE_FILE" ]; then
   body="$(curl --connect-timeout 2 --max-time 5 -fsS "$SITE_AGENT_STATUS_URL" 2>/dev/null || true)"
-  python3 - "$CAPTURE_FILE" "$body" <<'PY'
+  python3 - "$CAPTURE_FILE" "$body" "$(drives_online)" <<'PY'
 import json, sys
-path, body = sys.argv[1:]
+path, body, drives = sys.argv[1:]
 try:
     data = json.loads(body)
     errors = list(data.get("startup_errors") or [])
@@ -118,6 +131,7 @@ try:
     baseline = {"known": bool(data.get("startup_complete")), "errors": errors}
 except ValueError:
     baseline = {"known": False, "errors": []}
+baseline["drives_online"] = int(drives) if drives.isdigit() else None
 with open(path, "w") as out:
     json.dump(baseline, out)
 PY
@@ -273,6 +287,25 @@ if [ "$SOAK_S" -gt 0 ]; then
       fail "unstable_after_start:$last_err"
     fi
   done
+  # A release that can no longer reach drives the old one could reach must not
+  # stay installed. The loss has to hold for three checks, so one flaky drive
+  # at the wrong moment does not roll an update back.
+  before="$(python3 -c 'import json,sys; v=json.load(open(sys.argv[1])).get("drives_online"); print("" if v is None else v)' "$BASELINE_FILE" 2>/dev/null || true)"
+  if [ -n "$before" ] && [ "$before" -gt 0 ]; then
+    allowed=$(( before / 4 ))
+    lost_checks=0
+    for _ in 1 2 3; do
+      now="$(drives_online)"
+      if [ -n "$now" ] && [ $(( before - now )) -gt "$allowed" ]; then
+        lost_checks=$((lost_checks + 1))
+      fi
+      [ "$lost_checks" -eq 0 ] && break
+      sleep "${IPC_HEALTH_SOAK_POLL_S:-10}"
+    done
+    if [ "$lost_checks" -ge 3 ]; then
+      fail "equipment_lost: ${now} of ${before} drives reachable after the update"
+    fi
+  fi
 fi
 
 log "stack healthy"

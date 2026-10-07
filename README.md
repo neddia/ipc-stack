@@ -88,7 +88,9 @@ The health check waits up to 5 minutes for a slow start but fails at once on a
 crash loop. It records the running release's startup errors first and fails
 the new one only on errors it adds, so a dead drive at the site is not blamed
 on the update. After passing it watches site-agent for 3 more minutes
-(`IPC_UPDATE_SOAK_S`) before old images are pruned.
+(`IPC_UPDATE_SOAK_S`) before old images are pruned, and fails if the new
+release reaches fewer drives than the old one did (more than a quarter lost,
+or any on sites with up to three drives, confirmed over three checks).
 
 Updates pull through the release mirror. On a box whose `.env` still names
 `ghcr.io`, switch `SITE_AGENT_IMAGE` to `release-mirror:5000/neddia/site-agent`
