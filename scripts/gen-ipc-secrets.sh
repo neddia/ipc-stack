@@ -44,7 +44,6 @@ write_secret() {
 write_secret "$SECRETS_DIR/influx.admin.user" "ipc-admin"
 write_secret "$SECRETS_DIR/influx.admin.pass" "$(rand_cli_password)"
 write_secret "$SECRETS_DIR/influx.admin.token" "$(rand)"
-write_secret "$SECRETS_DIR/gatewayd.token" "$(rand)"
 
 KEY_PATH="$SECRETS_DIR/ipc_ed25519"
 PUB_PATH="$SECRETS_DIR/ipc_ed25519.pub"

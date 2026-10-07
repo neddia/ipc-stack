@@ -16,10 +16,10 @@ services:
 
   modbus-sim:
     profiles: ["sim"]
-    image: local/gatewayd:dev
+    image: local/site-agent:dev
     build:
       context: ${SETPOINT_DIR:-../setpoint}
-      dockerfile: docker/gatewayd.Dockerfile
+      dockerfile: docker/site-agent.Dockerfile
     volumes:
       - ${SETPOINT_DIR:-../setpoint}/tools:/app/tools
     command: ["python", "/app/tools/sims/modbus_sim.py"]
@@ -27,23 +27,19 @@ services:
 
   fake-miner-fleet:
     profiles: ["sim"]
-    image: local/gatewayd:dev
+    image: local/site-agent:dev
     build:
       context: ${SETPOINT_DIR:-../setpoint}
-      dockerfile: docker/gatewayd.Dockerfile
+      dockerfile: docker/site-agent.Dockerfile
     depends_on:
       sim-netns:
-        condition: service_started
-      gatewayd:
         condition: service_started
       site-agent:
         condition: service_started
     network_mode: "service:sim-netns"
     environment:
       SITE_CONFIG_PATH: /app/storage/site-config.sim.yml
-      GATEWAYD_BASE_URL: http://gatewayd:8080
       SITE_AGENT_BASE_URL: http://127.0.0.1:8000
-      GATEWAYD_TOKEN: devtoken
       SIM_MINER_PORT: 4028
     volumes:
       - ${SETPOINT_DIR:-../setpoint}/tools:/app/tools
@@ -62,8 +58,6 @@ services:
       SITE_PROFILES_DIR: /app/storage/site-profiles
     volumes:
       - ${SETPOINT_DIR:-../setpoint}/site-agent:/app/site-agent
-      - ${SETPOINT_DIR:-../setpoint}/gatewayd:/app/gatewayd:ro
-      - ${SETPOINT_DIR:-../setpoint}/ticlib:/app/ticlib
       - ${SETPOINT_DIR:-../setpoint}/profiles:/app/profiles:ro
     depends_on:
       influxdb:
@@ -73,7 +67,8 @@ services:
     network_mode: "service:sim-netns"
     ports: !reset []
     extra_hosts: !reset []
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    # Watch only code: /app also holds storage (ledgers, simulator runs).
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/site-agent"]
 
   tailwind:
     profiles: ["ui"]
@@ -96,22 +91,6 @@ services:
       - /app/site-agent/app/static/tailwind.css
       - --watch=always
     restart: unless-stopped
-
-  gatewayd:
-    image: local/gatewayd:dev
-    build:
-      context: ${SETPOINT_DIR:-../setpoint}
-      dockerfile: docker/gatewayd.Dockerfile
-    environment:
-      SITE_CONFIG_PATH: /data/site-config.sim.yml
-      GATEWAYD_BUILTIN_PROFILES_DIR: /app/profiles
-      GATEWAYD_SITE_PROFILES_DIR: /data/site-profiles
-    volumes:
-      - ${SETPOINT_DIR:-../setpoint}/gatewayd:/app/gatewayd
-      - ${SETPOINT_DIR:-../setpoint}/ticlib:/app/ticlib
-      - ${SETPOINT_DIR:-../setpoint}/profiles:/app/profiles:ro
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
 
 networks:
   cloud_core:

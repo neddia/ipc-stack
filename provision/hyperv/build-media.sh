@@ -13,7 +13,9 @@ TAILSCALE_ENV_FILE="${IPC_E2E_TAILSCALE_ENV_FILE:-$PRIVATE_DIR/tailscale.env}"
 CLOUD_ENROLLMENT_CONFIG="${IPC_E2E_CLOUD_ENROLLMENT_CONFIG:-$PRIVATE_DIR/cloud-enrollment.json}"
 SSH_KEY="$PRIVATE_DIR/id_ed25519"
 SSH_PUBLIC_KEY="${IPC_E2E_SSH_PUBLIC_KEY:-$SSH_KEY.pub}"
-CONSOLE_PASSWORD_FILE="$PRIVATE_DIR/console-password"
+# One console/sudo password per device, kept only on the operator workstation,
+# so a hash read from one customer's disk says nothing about any other box.
+CONSOLE_PASSWORD_FILE="$PRIVATE_DIR/console-passwords/$HOSTNAME"
 ISO_TOOLS_IMAGE="toops/ipc-e2e-iso-tools:bookworm"
 IMAGE_DIR="${IPC_E2E_IMAGE_DIR:-}"
 IMAGE_TAG="${IPC_E2E_IMAGE_TAG:-}"
@@ -40,8 +42,9 @@ if [ ! -s "$SSH_PUBLIC_KEY" ]; then
   fi
 fi
 if [ ! -s "$CONSOLE_PASSWORD_FILE" ]; then
-  openssl rand -base64 24 > "$CONSOLE_PASSWORD_FILE"
-  chmod 0600 "$CONSOLE_PASSWORD_FILE"
+  mkdir -p "$(dirname "$CONSOLE_PASSWORD_FILE")"
+  chmod 0700 "$(dirname "$CONSOLE_PASSWORD_FILE")"
+  (umask 077 && openssl rand -base64 24 > "$CONSOLE_PASSWORD_FILE")
 fi
 
 stage="$(mktemp -d "$CACHE_DIR/media-stage.XXXXXX")"
@@ -49,6 +52,12 @@ trap 'rm -rf "$stage"' EXIT
 cp "$STACK_DIR/provision/autoinstall/user-data" "$stage/user-data"
 cp "$STACK_DIR/provision/autoinstall/meta-data" "$stage/meta-data"
 cp "$SEED_FILE" "$stage/seed.env"
+# Installers never carry registry credentials; releases come from the
+# tailnet-only mirror. Older private seeds may still list them.
+if grep -Eq '^GHCR_(USER|TOKEN)=' "$stage/seed.env"; then
+  log "dropping GHCR credentials from the staged seed"
+  sed -i -E '/^GHCR_(USER|TOKEN)=/d' "$stage/seed.env"
+fi
 mkdir -p "$stage/enrollment"
 if [ "${IPC_E2E_SKIP_CLOUD_ENROLLMENT:-0}" != "1" ]; then
   [ -s "$CLOUD_ENROLLMENT_CONFIG" ] || die "download installer authorization from Cloud Platform to $CLOUD_ENROLLMENT_CONFIG (mode 600)"
@@ -107,16 +116,18 @@ elif [ -n "${IPC_E2E_CLOUD_BASE_URL:-}" ]; then
 fi
 
 mkdir -p "$stage/images"
+if [ -n "${IPC_E2E_SITE_AGENT_IMAGE:-}" ]; then
+  # Qualification only: point the device at another release mirror.
+  set_seed_values "$(python3 -c 'import json,os; print(json.dumps({"SITE_AGENT_IMAGE": os.environ["IPC_E2E_SITE_AGENT_IMAGE"]}))')"
+fi
 if [ -n "$IMAGE_TAG" ]; then
-  set_seed_values "$(IMAGE_TAG="$IMAGE_TAG" python3 -c 'import json,os; print(json.dumps({"SITE_AGENT_VERSION": os.environ["IMAGE_TAG"], "GATEWAYD_VERSION": os.environ["IMAGE_TAG"]}))')"
+  set_seed_values "$(IMAGE_TAG="$IMAGE_TAG" python3 -c 'import json,os; print(json.dumps({"SITE_AGENT_VERSION": os.environ["IMAGE_TAG"]}))')"
 fi
 if [ -n "$IMAGE_DIR" ]; then
   [ -n "$IMAGE_TAG" ] || die "IPC_E2E_IMAGE_TAG is required with IPC_E2E_IMAGE_DIR"
   site_archive="$IMAGE_DIR/site-agent-$IMAGE_TAG.tar.gz"
-  gateway_archive="$IMAGE_DIR/gatewayd-$IMAGE_TAG.tar.gz"
   [ -s "$site_archive" ] || die "missing $site_archive"
-  [ -s "$gateway_archive" ] || die "missing $gateway_archive"
-  cp "$site_archive" "$gateway_archive" "$stage/images/"
+  cp "$site_archive" "$stage/images/"
   set_seed_values "$(python3 -c 'import json; print(json.dumps({"IPC_PRELOAD_IMAGE_DIR": "/opt/ipc-stack/.e2e-images", "SKIP_IMAGE_PULL": "1"}))')"
 fi
 
@@ -181,16 +192,19 @@ docker run --rm \
       -extract /boot/grub/grub.cfg /work/stage/grub.cfg >/dev/null 2>&1
     chmod u+w /work/stage/grub.cfg
   '
-GRUB_CFG="$stage/grub.cfg" python3 - <<'PY'
+# Customer media asks for a typed "yes" before erasing the disk; lab VM builds
+# may set IPC_E2E_CONFIRM_ERASE=0 to run fully unattended.
+GRUB_CFG="$stage/grub.cfg" CONFIRM_ERASE="${IPC_E2E_CONFIRM_ERASE:-1}" python3 - <<'PY'
 import os
 from pathlib import Path
 
 path = Path(os.environ["GRUB_CFG"])
+keyword = "" if os.environ["CONFIRM_ERASE"] == "1" else " autoinstall"
 lines = []
 changed = 0
 for line in path.read_text().splitlines():
-    if "linux" in line and "/casper/vmlinuz" in line and "autoinstall" not in line:
-        line = line.replace(" ---", r" autoinstall ds=nocloud\;s=/cdrom/nocloud/ ---")
+    if "linux" in line and "/casper/vmlinuz" in line and "autoinstall" not in line and "ds=nocloud" not in line:
+        line = line.replace(" ---", keyword + r" ds=nocloud\;s=/cdrom/nocloud/ ---")
         changed += 1
     lines.append(line)
 if not changed:
@@ -218,3 +232,4 @@ docker run --rm \
 chmod 0600 "$OUTPUT_DIR/ubuntu-ipc-autoinstall.iso"
 log "media ready: $OUTPUT_DIR/ubuntu-ipc-autoinstall.iso"
 log "operator SSH public key embedded"
+log "console password for this device: $CONSOLE_PASSWORD_FILE"

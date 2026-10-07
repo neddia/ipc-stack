@@ -33,7 +33,7 @@ if ! curl -fsS --connect-timeout 5 https://api.github.com >/dev/null 2>&1; then
   exit 1
 fi
 
-# Load the per-site seed (TS_AUTHKEY, GHCR creds, version pins, ...).
+# Load the per-site seed (TS_AUTHKEY, release pins, cloud URLs, ...).
 if [ -f "$SEED_FILE" ]; then
   log "loading seed"
   set -a
@@ -66,8 +66,8 @@ pin_env() {
     printf '\n%s=%s\n' "$key" "$value" >>"$STACK_DIR/.env"
   fi
 }
+pin_env "SITE_AGENT_IMAGE" "${SITE_AGENT_IMAGE:-}"
 pin_env "SITE_AGENT_VERSION" "${SITE_AGENT_VERSION:-}"
-pin_env "GATEWAYD_VERSION" "${GATEWAYD_VERSION:-}"
 pin_env "CLOUD_BASE_URL" "${CLOUD_BASE_URL:-}"
 pin_env "CLOUD_PUBLIC_BASE_URL" "${CLOUD_PUBLIC_BASE_URL:-}"
 pin_env "HARDWARE_SERIAL" "${HARDWARE_SERIAL:-}"

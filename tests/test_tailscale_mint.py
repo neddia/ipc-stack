@@ -24,6 +24,13 @@ class MintTests(unittest.TestCase):
         self.assertEqual(out.getvalue(),'test-auth')
         body=json.loads(calls[1].data)
         self.assertRegex(body['description'],r'^[A-Za-z0-9 _-]+$')
-        self.assertEqual(body['capabilities']['devices']['create'],{'reusable':False,'ephemeral':False,'preauthorized':True,'tags':['tag:ipc']})
+        self.assertEqual(body['capabilities']['devices']['create'],{'reusable':False,'ephemeral':False,'preauthorized':False,'tags':['tag:ipc']})
+        self.assertEqual(body['expirySeconds'],7*86400)
+
+    def test_expiry_outside_tailscale_limits_is_rejected(self):
+        script=Path(__file__).resolve().parents[1]/'provision/mint-tailscale-auth-key.py'
+        with patch.dict(os.environ,{'TS_API_CLIENT_ID':'fake','TS_API_CLIENT_SECRET':'fake','TS_HOSTNAME':'ipc-e2e-01','TS_AUTHKEY_EXPIRY_SECONDS':str(91*86400)}),patch('urllib.request.urlopen',side_effect=AssertionError('no API call expected')),contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                runpy.run_path(str(script),run_name='__main__')
 
 if __name__=='__main__':unittest.main()

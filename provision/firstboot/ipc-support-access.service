@@ -1,0 +1,8 @@
+[Unit]
+Description=Enforce the Toops support access setting chosen on the site dashboard
+After=docker.service tailscaled.service ssh.service
+
+[Service]
+Type=oneshot
+Environment=IPC_STORAGE_DIR=/opt/site-agent/storage
+ExecStart=/usr/local/sbin/toops-support apply

@@ -8,8 +8,9 @@ ConditionPathExists=!/var/lib/ipc-firstboot.done
 Type=oneshot
 ExecStart=/usr/local/sbin/ipc-firstboot.sh
 RemainAfterExit=yes
-# Slow site uplinks + full docker/tailscale install can take a while.
-TimeoutStartSec=45min
+# Setup may wait indefinitely for an operator to approve the device on the
+# tailnet; the network wait and install steps fail on their own otherwise.
+TimeoutStartSec=infinity
 
 [Install]
 WantedBy=multi-user.target
