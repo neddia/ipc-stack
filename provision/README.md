@@ -197,6 +197,35 @@ accepts or signs in, Toops Cloud creates its local user row and attaches the
 invited customer membership. Customer, site, and site-agent names can be
 changed later without changing their stable identities or re-pairing.
 
+## When a trial ends
+
+The signed optimizer license says what the controller does once it lapses:
+
+- **Commissioning settled** (Cloud Billing: "Customer may start the subscription" ticked):
+  when the subscription later ends, each zone keeps following Basin's learned map
+  for the current outdoor temperature and load, with no learning or tests and full
+  speed where nothing was mapped. Nothing to run.
+- **Trial not converted**: Basin stops and the fans go to full speed. Then:
+  1. Put the drives back on the customer's own control. This depends on the site
+     (remote/local switch, run and speed source, sometimes more) and is done by hand.
+  2. `provision/offboard-controller.sh <hostname>` uploads a final recovery backup to
+     Cloud, clears Basin from the box, takes it off the tailnet and powers it off. It
+     needs Toops support access and the controller's console password. Removing the
+     tailnet machine needs an OAuth client with `devices:core`; otherwise remove it
+     in the admin console.
+  3. On the Cloud VM: `docker compose exec api python -m app.offboard "Customer name"`
+     shows what changes; add `--yes` to end access, unpair the site and retire the
+     hardware. The customer's data stays for a later purchase, and each site's last
+     recovery backup is named "Trial ended <date>" so pruning never removes it.
+
+If the customer comes back, give them access again (trial grant or "may start the
+subscription"), install the ISO on the controller as for a new box, and assign it
+to the customer in Platform → Hardware. Then open the site, choose **Replace
+hardware**, select the "Trial ended <date>" backup and the controller. It restores
+the configuration, site profiles, learned maps, comparison setup and training
+evidence, and miner identities; issued statements never left Cloud. Check the
+drives' run and speed source again before Basin takes control.
+
 ## Access and credential handling
 
 Tailscale is the private network transport. Standard Ubuntu OpenSSH remains
