@@ -1,0 +1,10 @@
+# Test Cloud only: Caddy's internal CA issues a certificate for the VM's IP.
+{
+	default_sni {$E2E_IP}
+	skip_install_trust
+}
+
+https://{$E2E_IP} {
+	tls internal
+	reverse_proxy 127.0.0.1:8001
+}

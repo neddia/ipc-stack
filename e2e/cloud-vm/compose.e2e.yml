@@ -1,0 +1,25 @@
+# e2e Cloud VM overrides: HTTPS from Caddy's internal CA on the VM's address
+# (enrollment requires https), hot-swappable API code, no monitoring stack.
+services:
+  api:
+    volumes:
+      - ./.secrets:/run/secrets:ro
+      - ./grafana/provisioning:/app/grafana/provisioning
+      - ./api/app:/app/app
+    environment:
+      CLOUD_ENV: development
+      COOKIE_SECURE: "0"
+      COOKIE_DOMAIN: ""
+
+  caddy-e2e:
+    image: caddy:2.10
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      E2E_IP: ${E2E_IP:?set E2E_IP}
+    volumes:
+      - ./caddy-e2e.Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-e2e-data:/data
+
+volumes:
+  caddy-e2e-data:

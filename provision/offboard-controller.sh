@@ -32,15 +32,24 @@ ssh -o ConnectTimeout=10 "$ssh_target" 'hostname; docker ps --format "  {{.Names
 # The automatic backup runs every few minutes; take one now so a returning
 # customer is restored from exactly this state (Cloud: Replace hardware).
 echo "[offboard] saving a final recovery backup to Cloud"
-if ssh "$ssh_target" 'c=$(docker ps -q --filter label=com.docker.compose.service=site-agent | head -1)
-  [ -n "$c" ] && docker exec "$c" /app/.venv/bin/python -c "
+# Only the last line (the reason) is shown; the app's own logging stays quiet.
+backup_result="$(ssh "$ssh_target" 'c=$(docker ps -q --filter label=com.docker.compose.service=site-agent | head -1)
+  [ -n "$c" ] || { echo "site-agent container is not running"; exit 1; }
+  docker exec "$c" /app/.venv/bin/python -c "
 import logging; logging.disable(logging.CRITICAL)
 from app.runtime import settings
-from app.services.cloud.recovery import upload_recovery_bundle
-raise SystemExit(0 if upload_recovery_bundle(settings) else 1)"' >/dev/null 2>&1; then
+from app.services.cloud import status
+from app.services.cloud.recovery import backup_blocked, upload_recovery_bundle
+if backup_blocked(settings):
+    print(\"backups are paused while a hardware replacement or restore is pending\"); raise SystemExit(1)
+if upload_recovery_bundle(settings):
+    print(\"ok\"); raise SystemExit(0)
+print(\"Cloud refused or was unreachable: \" + str(status.snapshot().get(\"recovery_sync\", {}).get(\"last_error\") or \"no detail\"))
+raise SystemExit(1)" 2>/dev/null' | tail -n 1)" || true
+if [ "$backup_result" = "ok" ]; then
   echo "[offboard] backup saved: configuration, learned maps, comparisons and miner identities"
 else
-  echo "[offboard] WARNING: Cloud did not accept a fresh backup; an older automatic one may be all that is kept."
+  echo "[offboard] WARNING: Cloud did not accept a fresh backup (${backup_result:-no response}); an older automatic one may be all that is kept."
   read -r -p "Wipe anyway? Type 'no backup': " answer
   [ "$answer" = "no backup" ] || die "stopped: fix the controller's Cloud connection and run this again"
 fi

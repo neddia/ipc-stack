@@ -1,0 +1,45 @@
+#cloud-config
+# Development-only: a disposable Ubuntu VM that runs a test Toops Cloud for the
+# end-to-end run (e2e/README.md). Never used for customer hardware.
+autoinstall:
+  version: 1
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  timezone: Etc/UTC
+  shutdown: poweroff
+  identity:
+    hostname: HOSTNAME_CHANGEME
+    username: toops
+    password: "CHANGEME_SHA512_CRYPT"
+  ssh:
+    install-server: true
+    allow-pw: false
+    authorized-keys:
+      - "OPERATOR_KEY_CHANGEME"
+  storage:
+    layout:
+      name: direct
+      match:
+        size: largest
+  packages:
+    - git
+    - curl
+    - ca-certificates
+    - docker.io
+    - docker-compose-v2
+    - python3
+    - rsync
+    - jq
+    - sqlite3
+  network:
+    version: 2
+    ethernets:
+      all-ethernet:
+        match:
+          name: "e*"
+        dhcp4: true
+        optional: true
+  late-commands:
+    - curtin in-target -- usermod -aG docker toops
+    - echo 'toops ALL=(ALL) NOPASSWD:ALL' > /target/etc/sudoers.d/90-e2e && chmod 0440 /target/etc/sudoers.d/90-e2e

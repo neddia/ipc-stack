@@ -174,7 +174,19 @@ if [ "$USE_LOCAL_STACK" = "1" ]; then
     --exclude='seed.env' --exclude='operator.env' --exclude='tailscale.env' --exclude='cloud-enrollment.json' \
     --exclude='*.pid' --exclude='__pycache__' --exclude='*.pyc' \
     --exclude='.pytest_cache' --exclude='.ruff_cache' --exclude='.venv' .
+  if [ -n "${IPC_E2E_LICENSE_PUBLIC_KEY:-}" ]; then
+    # Qualification against a test Cloud: trust its license key instead of
+    # production's. Never set for customer media (it needs the local stack).
+    [ -s "$IPC_E2E_LICENSE_PUBLIC_KEY" ] || die "missing $IPC_E2E_LICENSE_PUBLIC_KEY"
+    log "trusting the test Cloud license key $IPC_E2E_LICENSE_PUBLIC_KEY"
+    mkdir -p "$stage/stack-overlay"
+    cp "$IPC_E2E_LICENSE_PUBLIC_KEY" "$stage/stack-overlay/cloud.license.ed25519.pub"
+    gzip -d "$stage/ipc-stack.tar.gz"
+    tar -C "$stage/stack-overlay" -rf "$stage/ipc-stack.tar" ./cloud.license.ed25519.pub
+    gzip "$stage/ipc-stack.tar"
+  fi
 else
+  [ -z "${IPC_E2E_LICENSE_PUBLIC_KEY:-}" ] || die "IPC_E2E_LICENSE_PUBLIC_KEY needs IPC_E2E_LOCAL_STACK=1"
   # Keep the embedded NoCloud layout stable; production ignores this archive.
   tar -czf "$stage/ipc-stack.tar.gz" --files-from /dev/null
 fi
