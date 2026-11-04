@@ -44,7 +44,7 @@ services:
       - "${SITE_AGENT_BIND_HOST:-0.0.0.0}:${SITE_AGENT_HOST_PORT:-8000}:8000"
 
   telegraf:
-    image: telegraf:1.29
+    image: telegraf:1.40.3
     user: "0:0"
     restart: unless-stopped
     depends_on:
