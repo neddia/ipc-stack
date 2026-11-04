@@ -231,6 +231,11 @@ install_docker_stack
 if [ "${SKIP_TAILSCALE:-0}" != "1" ]; then
   install_tailscale
   tailscale_up
+  # Tailscale installs from its own package source, which the security-only
+  # OS updates never touch; let it apply its own releases.
+  if command -v tailscale >/dev/null 2>&1; then
+    tailscale set --auto-update || log "could not enable Tailscale auto-update"
+  fi
   if [ -z "${TAILSCALE_IP:-}" ] && command -v tailscale >/dev/null 2>&1; then
     DETECTED_TS_IP="$(tailscale ip -4 2>/dev/null | head -1 || true)"
     if [ -n "$DETECTED_TS_IP" ]; then

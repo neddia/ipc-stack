@@ -50,12 +50,30 @@ ensure_timesync() {
 security_updates() {
   log "enabling unattended-upgrades (security only)"
   if apt_install unattended-upgrades; then
-    cat >/etc/apt/apt.conf.d/51unattended-upgrades-security-only <<'CONF'
-Unattended-Upgrade::Allowed-Origins {
-        "${distro_id}:${distro_codename}-security";
-};
-Unattended-Upgrade::Automatic-Reboot "false";
+    # Turn the daily run on explicitly instead of trusting the install image.
+    cat >/etc/apt/apt.conf.d/20auto-upgrades <<'CONF'
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+APT::Periodic::AutocleanInterval "7";
 CONF
+    # Kernel fixes only take effect after a reboot. A reboot stops control for
+    # a minute or two, so it stays off until the site's drives are known to
+    # hold speed without the controller; IPC_AUTO_REBOOT_TIME (e.g. 03:30,
+    # site local) enables it, and it then reboots only when an update needs it.
+    local reboot="false" reboot_time="${IPC_AUTO_REBOOT_TIME:-}"
+    if [ -n "$reboot_time" ]; then
+      reboot="true"
+    fi
+    cat >/etc/apt/apt.conf.d/51unattended-upgrades-security-only <<CONF
+Unattended-Upgrade::Allowed-Origins {
+        "\${distro_id}:\${distro_codename}-security";
+};
+Unattended-Upgrade::Automatic-Reboot "${reboot}";
+CONF
+    if [ -n "$reboot_time" ]; then
+      echo "Unattended-Upgrade::Automatic-Reboot-Time \"${reboot_time}\";" \
+        >>/etc/apt/apt.conf.d/51unattended-upgrades-security-only
+    fi
     systemctl enable --now unattended-upgrades || true
   fi
 }
