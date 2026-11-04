@@ -48,7 +48,7 @@ ensure_timesync() {
 
 
 security_updates() {
-  log "enabling unattended-upgrades (security only)"
+  log "enabling unattended-upgrades (Ubuntu security fixes and Tailscale)"
   if apt_install unattended-upgrades; then
     # Turn the daily run on explicitly instead of trusting the install image.
     cat >/etc/apt/apt.conf.d/20auto-upgrades <<'CONF'
@@ -67,6 +67,11 @@ CONF
     cat >/etc/apt/apt.conf.d/51unattended-upgrades-security-only <<CONF
 Unattended-Upgrade::Allowed-Origins {
         "\${distro_id}:\${distro_codename}-security";
+};
+// Tailscale ships from its own package source. Docker's source is left out:
+// its updates restart every container, so it moves with ipc-stack releases.
+Unattended-Upgrade::Origins-Pattern {
+        "origin=Tailscale,label=Tailscale,site=pkgs.tailscale.com";
 };
 Unattended-Upgrade::Automatic-Reboot "${reboot}";
 CONF

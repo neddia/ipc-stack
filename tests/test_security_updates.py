@@ -31,6 +31,12 @@ class SecurityUpdateTests(unittest.TestCase):
         self.assertIn('APT::Periodic::Unattended-Upgrade "1";', periodic)
         self.assertIn('"${distro_id}:${distro_codename}-security";', policy)
 
+    def test_tailscale_updates_but_docker_does_not(self):
+        _, policy = self.run_with('')
+        self.assertIn('"origin=Tailscale,label=Tailscale,site=pkgs.tailscale.com";', policy)
+        self.assertNotIn('origin=Docker', policy)
+        self.assertNotIn('download.docker.com', policy)
+
     def test_reboots_stay_off_without_a_site_time(self):
         _, policy = self.run_with('')
         self.assertIn('Unattended-Upgrade::Automatic-Reboot "false";', policy)
