@@ -12,6 +12,9 @@ import subprocess
 import tempfile
 import unittest
 
+# A full stack start; update.sh also removes services a release dropped.
+STACK_STARTS = (['compose', 'up', '-d'], ['compose', 'up', '-d', '--remove-orphans'])
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -99,7 +102,7 @@ if args[:2] == ['compose', 'pull'] and os.environ.get('TEST_PULL_FAIL'):
     sys.exit(1)
 if args[:2] == ['image', 'inspect']:
     print(os.environ.get('TEST_REPO_DIGEST', ''))
-if args == ['compose', 'up', '-d'] and os.environ.get('SITE_AGENT_VERSION') == 'v2' and os.environ.get('TEST_MIGRATE'):
+if args[:3] == ['compose', 'up', '-d'] and 'influxdb' not in args and os.environ.get('SITE_AGENT_VERSION') == 'v2' and os.environ.get('TEST_MIGRATE'):
     # The new release rewrites config the way a migration would.
     pathlib.Path(os.environ['IPC_STORAGE_DIR'], 'site-config.yml').write_text('migrated: true\n')
 if args[:1] == ['run']:
@@ -167,6 +170,8 @@ sys.exit(int(results[min(n, len(results) - 1)]))
         self.assertNotIn('GATEWAYD', saved)
         removed = [c['args'][1] for c in self.commands() if c['args'][0] == 'rmi']
         self.assertEqual(removed, ['example/site-agent:v0'])
+        # Services a release no longer defines (such as Telegraf) are stopped.
+        self.assertIn(['compose', 'up', '-d', '--remove-orphans'], [c['args'] for c in self.commands()])
 
     def test_failed_update_rolls_back_and_does_not_prune_images(self):
         self.make_identity()
@@ -174,7 +179,7 @@ sys.exit(int(results[min(n, len(results) - 1)]))
         result = self.run_script('update.sh', 'v2', ok=False)
         self.assertIn('rollback to v1 healthy', result.stdout)
         self.assertIn('SITE_AGENT_VERSION=v1\n', self.env_file.read_text())
-        starts = [c['version'] for c in self.commands() if c['args'] == ['compose', 'up', '-d']]
+        starts = [c['version'] for c in self.commands() if c['args'] in STACK_STARTS]
         self.assertEqual(starts, ['v2', 'v1'])
         self.assertFalse(any(c['args'][0] == 'rmi' for c in self.commands()))
 
@@ -194,7 +199,8 @@ sys.exit(int(results[min(n, len(results) - 1)]))
         self.assertIn('restoring site state', result.stdout)
         self.assertEqual((self.storage / 'site-config.yml').read_text(), 'site: original\n')
         args = [c['args'] for c in self.commands()]
-        self.assertLess(args.index(['compose', 'stop', 'site-agent']), len(args) - 1 - args[::-1].index(['compose', 'up', '-d']))
+        last_start = max(i for i, a in enumerate(args) if a in STACK_STARTS)
+        self.assertLess(args.index(['compose', 'stop', 'site-agent']), last_start)
         snapshots = list((self.storage / 'update-snapshots').iterdir())
         self.assertEqual(len(snapshots), 1)
         self.assertIn('v1-to-v2', snapshots[0].name)

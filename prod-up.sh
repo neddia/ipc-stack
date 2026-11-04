@@ -122,8 +122,9 @@ fi
 
 cd "$STACK_DIR"
 docker compose -f compose.yml --env-file "$ENV_FILE" up -d influxdb
-log "validating influx buckets and telegraf token"
+log "validating influx buckets"
 IPC_SECRETS_DIR="$SECRETS_DIR" "$STACK_DIR/scripts/bootstrap-influx.sh" "$ENV_FILE"
-docker compose -f compose.yml --env-file "$ENV_FILE" up -d
+# --remove-orphans stops services this release no longer defines (Telegraf).
+docker compose -f compose.yml --env-file "$ENV_FILE" up -d --remove-orphans
 
 "$STACK_DIR/scripts/check-health.sh" --env-file "$ENV_FILE"

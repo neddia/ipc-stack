@@ -100,7 +100,6 @@ fi
 SECRETS_DIR="${IPC_SECRETS_DIR:-$STACK_DIR/.secrets}"
 INFLUX_ADMIN_TOKEN_FILE="$SECRETS_DIR/influx.admin.token"
 INFLUX_ORG="${INFLUX_ORG:-edge-org}"
-TELEGRAF_BUCKET="${TELEGRAF_BUCKET:-telegraf}"
 
 compose() {
   docker compose -f "$STACK_DIR/compose.yml" --env-file "$ENV_FILE" "$@"
@@ -141,7 +140,7 @@ fi
 compose_services_running() {
   local running
   running="$(compose ps --services --status running 2>/dev/null || true)"
-  for svc in influxdb site-agent telegraf; do
+  for svc in influxdb site-agent; do
     if ! grep -qx "$svc" <<<"$running"; then
       echo "service_not_running:$svc"
       return 1
@@ -213,26 +212,6 @@ if baseline.get("known"):
 PY
 }
 
-check_telegraf_freshness() {
-  local token csv flux
-  if [ ! -s "$INFLUX_ADMIN_TOKEN_FILE" ]; then
-    echo "telegraf_check_missing_admin_token"
-    return 1
-  fi
-  token="$(tr -d '\r\n' < "$INFLUX_ADMIN_TOKEN_FILE")"
-  flux="from(bucket: \"${TELEGRAF_BUCKET}\") |> range(start: -2m) |> filter(fn: (r) => r._measurement == \"cpu\" and r.cpu == \"cpu-total\") |> last() |> keep(columns: [\"_time\"])"
-  csv="$(curl --connect-timeout 2 --max-time 8 -fsS \
-    -H "Authorization: Token $token" \
-    -H "Accept: application/csv" \
-    -H "Content-Type: application/vnd.flux" \
-    --data-binary "$flux" \
-    "$INFLUX_API_URL/api/v2/query?org=$INFLUX_ORG" 2>/dev/null || true)"
-  if ! awk 'BEGIN { rows=0 } !/^#/ && NF { rows++ } END { exit(rows >= 2 ? 0 : 1) }' <<<"$csv"; then
-    echo "telegraf_metrics_stale"
-    return 1
-  fi
-}
-
 fail() {
   echo "[ipc-health] failed: $1" >&2
   compose ps || true
@@ -254,10 +233,6 @@ while [ "$SECONDS" -lt "$deadline" ]; do
     continue
   fi
   if ! last_err="$(check_endpoint influx "$INFLUX_HEALTH_URL" '"status":"pass"')"; then
-    sleep 2
-    continue
-  fi
-  if ! last_err="$(check_telegraf_freshness)"; then
     sleep 2
     continue
   fi

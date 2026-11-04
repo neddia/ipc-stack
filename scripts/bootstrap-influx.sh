@@ -30,21 +30,8 @@ elif echo "$INFLUX_URL" | grep -q "://influxdb:"; then
 fi
 INFLUX_ORG="${INFLUX_ORG:-edge-org}"
 EDGE_BUCKET="${INFLUX_BUCKET:-edge-site}"
-TELEGRAF_BUCKET="${TELEGRAF_BUCKET:-telegraf}"
-TELEGRAF_RETENTION="${TELEGRAF_RETENTION:-14d}"
 
 ADMIN_TOKEN_FILE="$SECRETS_DIR/influx.admin.token"
-TELEGRAF_TOKEN_FILE="$SECRETS_DIR/influx.telegraf.token"
-
-# Older install ordering could cause Docker to create the missing bind source
-# as a directory before bootstrap ran. Repair that exact empty-directory state
-# so a subsequent first-boot retry can recover without manual intervention.
-if [ -d "$TELEGRAF_TOKEN_FILE" ]; then
-  if ! rmdir "$TELEGRAF_TOKEN_FILE"; then
-    echo "[ipc] expected telegraf token file but found a non-empty directory: $TELEGRAF_TOKEN_FILE" >&2
-    exit 1
-  fi
-fi
 
 if [ ! -s "$ADMIN_TOKEN_FILE" ]; then
   echo "[ipc] missing admin token at $ADMIN_TOKEN_FILE" >&2
@@ -125,83 +112,6 @@ PY
 )" >/dev/null
   bucket_json="$(curl "${CURL_ARGS[@]}" -fsS -H "Authorization: Token $ADMIN_TOKEN" "$INFLUX_URL/api/v2/buckets?org=$INFLUX_ORG")"
   EDGE_BUCKET_ID="$(bucket_id "$EDGE_BUCKET" <<<"$bucket_json")"
-fi
-
-TELEGRAF_BUCKET_ID="$(bucket_id "$TELEGRAF_BUCKET" <<<"$bucket_json" || true)"
-if [ -z "$TELEGRAF_BUCKET_ID" ]; then
-  log "creating bucket $TELEGRAF_BUCKET (retention $TELEGRAF_RETENTION)"
-  curl "${CURL_ARGS[@]}" -fsS -H "Authorization: Token $ADMIN_TOKEN" \
-    -H "Content-Type: application/json" \
-    -X POST "$INFLUX_URL/api/v2/buckets" \
-    -d "$(python3 - <<PY
-import json, re
-ret = "$TELEGRAF_RETENTION".strip()
-rules = []
-if ret and ret not in ("0", "0s", "infinite", "none"):
-    m = re.match(r"^(\d+)([smhdw])$", ret)
-    if not m:
-        raise SystemExit("invalid TELEGRAF_RETENTION")
-    n = int(m.group(1))
-    unit = m.group(2)
-    mult = {"s":1,"m":60,"h":3600,"d":86400,"w":604800}[unit]
-    rules = [{"type":"expire","everySeconds": n*mult}]
-payload = {"orgID": "$ORG_ID", "name": "$TELEGRAF_BUCKET"}
-if rules:
-    payload["retentionRules"] = rules
-print(json.dumps(payload))
-PY
-)" >/dev/null
-  bucket_json="$(curl "${CURL_ARGS[@]}" -fsS -H "Authorization: Token $ADMIN_TOKEN" "$INFLUX_URL/api/v2/buckets?org=$INFLUX_ORG")"
-  TELEGRAF_BUCKET_ID="$(bucket_id "$TELEGRAF_BUCKET" <<<"$bucket_json")"
-fi
-
-telegraf_token_valid() {
-  local candidate
-  [ -s "$TELEGRAF_TOKEN_FILE" ] || return 1
-  candidate="$(tr -d '\r\n' < "$TELEGRAF_TOKEN_FILE")"
-  [ -n "$candidate" ] || return 1
-  curl "${CURL_ARGS[@]}" -fsS -o /dev/null \
-    -H "Authorization: Token $candidate" \
-    -H "Content-Type: text/plain; charset=utf-8" \
-    -X POST \
-    --data-binary "ipc_telegraf_auth_check value=1i" \
-    "$INFLUX_URL/api/v2/write?org=$INFLUX_ORG&bucket=$TELEGRAF_BUCKET"
-}
-
-if telegraf_token_valid; then
-  log "validated existing telegraf token"
-  # The token is mounted into a rootless/container-user namespace. The parent
-  # secrets directory remains 0700 and only this write-only bucket token is
-  # made container-readable.
-  chmod 644 "$TELEGRAF_TOKEN_FILE" || true
-else
-  log "creating replacement telegraf token"
-  token_json="$(curl "${CURL_ARGS[@]}" -fsS -H "Authorization: Token $ADMIN_TOKEN" \
-    -H "Content-Type: application/json" \
-    -X POST "$INFLUX_URL/api/v2/authorizations" \
-    -d "$(python3 - <<PY
-import json
-payload = {
-  "orgID": "$ORG_ID",
-  "description": "ipc-telegraf-writer",
-  "permissions": [
-    {"action": "write", "resource": {"type": "buckets", "id": "$TELEGRAF_BUCKET_ID"}},
-  ],
-}
-print(json.dumps(payload))
-PY
-)" )"
-token="$(python3 -c 'import json,sys
-d=json.load(sys.stdin)
-print(d.get("token") or "")
-' <<<"$token_json")"
-
-  if [ -z "$token" ]; then
-    echo "[ipc] failed to create telegraf token" >&2
-    exit 1
-  fi
-  printf '%s' "$token" > "$TELEGRAF_TOKEN_FILE"
-  chmod 644 "$TELEGRAF_TOKEN_FILE" || true
 fi
 
 log "influx bootstrap done"

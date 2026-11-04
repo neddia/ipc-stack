@@ -32,7 +32,7 @@ class CheckHealthTests(unittest.TestCase):
 import json, os, pathlib, sys
 args = sys.argv[1:]
 if 'ps' in args and '--services' in args:
-    print('influxdb\nsite-agent\ntelegraf')
+    print('influxdb\nsite-agent')
 elif 'ps' in args and '-q' in args:
     print('cid')
 elif args[:1] == ['inspect']:

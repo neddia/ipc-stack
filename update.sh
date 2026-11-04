@@ -185,10 +185,11 @@ if [ "$STACK_DIR" = '/opt/ipc-stack' ] && [ "$("$STACK_DIR/scripts/configure-log
   RECREATE=(--force-recreate)
 fi
 
-log "validating influx buckets and telegraf token"
+log "validating influx buckets"
 docker compose up -d "${RECREATE[@]}" influxdb
 "$STACK_DIR/scripts/bootstrap-influx.sh"
-docker compose up -d "${RECREATE[@]}"
+# --remove-orphans stops services this release no longer defines (Telegraf).
+docker compose up -d --remove-orphans "${RECREATE[@]}"
 
 ensure_user_owned "$STACK_DIR/.secrets"
 
