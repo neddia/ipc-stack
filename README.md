@@ -133,6 +133,11 @@ SETPOINT_DIR=/home/you/setpoint ./dev-up.sh
 
 `dev-up.sh` will prefer `.env.dev` if present; otherwise it uses `.env`.
 
+Before starting containers, `dev-up.sh` runs setpoint's
+`tools/sims/sim_profiles.py` to copy the site models the sim config needs into
+`$IPC_STORAGE_DIR/site-profiles`. It only adds missing files. It needs
+`python3` on the host.
+
 
 For dev, secrets default to `../ipc-secrets` (outside the repo) via `.env.dev`.
 

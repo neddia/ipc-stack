@@ -86,6 +86,20 @@ if [ "${OPTIMIZER_LICENSE_POLICY:-off}" = "required" ] && [ -z "${CLOUD_LICENSE_
 fi
 
 cd "$STACK_DIR"
+
+# The dev compose runs setpoint's sim config, which pins site models that
+# setpoint tracks as simulator fixtures (site profiles themselves are
+# site-owned and untracked). Copy any that are missing; existing files are kept.
+# Relative paths match compose, which resolves them from this directory.
+SIM_PROFILE_SEEDER="${SETPOINT_DIR:-../setpoint}/tools/sims/sim_profiles.py"
+if [ -f "$SIM_PROFILE_SEEDER" ]; then
+  if command -v python3 >/dev/null 2>&1; then
+    python3 "$SIM_PROFILE_SEEDER" "${IPC_STORAGE_DIR:-../setpoint/storage}/site-profiles"
+  else
+    echo "[ipc-dev] warning: python3 not found; sim site models were not seeded" >&2
+  fi
+fi
+
 COMPOSE_BASE_ARGS=(-f compose.yml -f compose.dev.yml --env-file "$ENV_FILE")
 UP_ARGS=(-d)
 
