@@ -142,7 +142,9 @@ Before starting containers, `dev-up.sh` runs setpoint's
 For dev, secrets default to `../ipc-secrets` (outside the repo) via `.env.dev`.
 
 By default, `dev-up.sh` starts the Tailwind watcher so template class changes are
-compiled into `site-agent/app/static/tailwind.css`. Optional toggles:
+compiled into `site-agent/app/static/tailwind.css`, which is generated and not
+tracked. If setpoint's `bin/tailwindcss` is missing, `dev-up.sh` downloads it with
+`make`, so it needs `make` and `curl` on the host. Optional toggles:
 
 ```bash
 # include sim container(s)

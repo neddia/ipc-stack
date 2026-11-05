@@ -100,6 +100,19 @@ if [ -f "$SIM_PROFILE_SEEDER" ]; then
   fi
 fi
 
+# The Tailwind watcher mounts setpoint's git-ignored bin/tailwindcss. Docker would
+# create a root-owned directory in place of a missing file, so fetch it first.
+if [ "${ENABLE_TAILWIND:-1}" = "1" ]; then
+  TAILWIND_BIN="${SETPOINT_DIR:-../setpoint}/bin/tailwindcss"
+  if [ ! -f "$TAILWIND_BIN" ]; then
+    make -C "${SETPOINT_DIR:-../setpoint}" ./bin/tailwindcss || true
+  fi
+  if [ ! -f "$TAILWIND_BIN" ]; then
+    echo "[ipc-dev] error: could not get $TAILWIND_BIN. Run 'make ./bin/tailwindcss' in setpoint, or set ENABLE_TAILWIND=0." >&2
+    exit 1
+  fi
+fi
+
 COMPOSE_BASE_ARGS=(-f compose.yml -f compose.dev.yml --env-file "$ENV_FILE")
 UP_ARGS=(-d)
 
