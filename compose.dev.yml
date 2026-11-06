@@ -23,6 +23,14 @@ services:
     volumes:
       - ${SETPOINT_DIR:-../setpoint}/tools:/app/tools
     command: ["python", "/app/tools/sims/modbus_sim.py"]
+    # Replaces the image's check, which calls site-agent's HTTP port. Reads one
+    # register, so a hung simulator fails even though the kernel accepts the connection.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/1502 && printf '\\x01\\x01\\x00\\x00\\x00\\x06\\x01\\x03\\x00\\x00\\x00\\x01' >&3 && read -r -t 3 -n 1 -u 3 reply"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
 
   fake-miner-fleet:
@@ -45,6 +53,16 @@ services:
       - ${SETPOINT_DIR:-../setpoint}/tools:/app/tools
       - ${IPC_STORAGE_DIR:-../setpoint/storage}:/app/storage
     command: ["python", "/app/tools/sims/fake_cgminer_fleet.py"]
+    # Replaces the image's check, which reaches site-agent through the shared
+    # namespace. Asks the first miner in storage/site-config.sim.yml for a summary.
+    # Exit 1 is a miner closing the connection while it reboots after an overheat,
+    # which still shows the fleet is running. Only a refusal or a timeout fails.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.77.1.1/4028 && printf '{\"command\":\"summary\"}' >&3 && { read -r -t 3 -d '' -u 3 reply; [ $$? -le 1 ]; }"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
     restart: unless-stopped
 
   site-agent:
@@ -68,7 +86,8 @@ services:
     ports: !reset []
     extra_hosts: !reset []
     # Watch only code: /app also holds storage (ledgers, simulator runs).
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/site-agent"]
+    # Without watchfiles, --reload scans the files on this delay (default 0.25s).
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-delay", "1", "--reload-dir", "/app/site-agent"]
 
   tailwind:
     profiles: ["ui"]
@@ -90,6 +109,15 @@ services:
       - -o
       - /app/site-agent/app/static/tailwind.css
       - --watch=always
+    # Replaces the image's check, which calls site-agent's HTTP port. Tailwind serves
+    # nothing, so healthy means the CSS exists. Comparing file times would fail after
+    # any save that doesn't change the CSS, because Tailwind then leaves the file alone.
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /app/site-agent/app/static/tailwind.css"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
 
 networks:
