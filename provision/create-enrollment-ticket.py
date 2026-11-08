@@ -34,7 +34,9 @@ def create(config_path, output_path, name):
         with os.fdopen(fd,'w') as stream:
             json.dump(ticket,stream);stream.flush();os.fsync(stream.fileno())
     body=json.dumps({'request_id':ticket['ticket_id'],'token':ticket['token'],'name':name}).encode()
-    request=urllib.request.Request(base+'/factory/enrollment-tickets',body,{'Content-Type':'application/json','Authorization':'Bearer '+config['credential']},method='POST')
+    request=urllib.request.Request(base+'/factory/enrollment-tickets',body,{'Content-Type':'application/json','Authorization':'Bearer '+config['credential'],
+        # Cloudflare's browser check rejects urllib's default User-Agent (error 1010).
+        'User-Agent':'toops-provisioning/1'},method='POST')
     with urllib.request.build_opener(NoRedirect).open(request,timeout=20) as response:
         result=json.loads(response.read(8192))
     if result['id']!=ticket['ticket_id']:raise ValueError('Enrollment ticket response mismatch')

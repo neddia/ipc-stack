@@ -110,7 +110,8 @@ else
 fi
 
 if [ -s "$stage/enrollment/cloud-enrollment.json" ]; then
-  set_seed_values "$(python3 -c 'import json,os,sys; u=json.load(open(sys.argv[1]))["cloud_url"]; override=os.environ.get("IPC_E2E_CLOUD_BASE_URL",u).rstrip("/"); assert override==u, "Cloud override conflicts with installer authorization"; print(json.dumps({"CLOUD_BASE_URL":u,"CLOUD_PUBLIC_BASE_URL":u}))' "$stage/enrollment/cloud-enrollment.json")"
+  cloud_urls="$(python3 "$STACK_DIR/provision/seed-cloud-urls.py" "$stage/enrollment/cloud-enrollment.json" "$CLOUD_ENROLLMENT_CONFIG")"
+  set_seed_values "$cloud_urls"
 elif [ -n "${IPC_E2E_CLOUD_BASE_URL:-}" ]; then
   set_seed_values "$(python3 -c 'import json,os; print(json.dumps({"CLOUD_BASE_URL": os.environ["IPC_E2E_CLOUD_BASE_URL"], "CLOUD_PUBLIC_BASE_URL": os.environ["IPC_E2E_CLOUD_BASE_URL"]}))')"
 fi

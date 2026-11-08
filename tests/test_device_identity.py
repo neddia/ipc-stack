@@ -125,5 +125,52 @@ class DeviceIdentityTests(unittest.TestCase):
         config.chmod(0o644)
         with self.assertRaises(ValueError): tickets.create(config, output, 'spare')
 
+    def test_ticket_request_names_its_own_client(self):
+        # Cloudflare's browser check refuses urllib's default User-Agent (error 1010).
+        config = self.root / 'installer.json'
+        config.write_text(json.dumps({'cloud_url': 'https://cloud.example', 'credential': 'installer-test-only'}))
+        config.chmod(0o600)
+        agents = []
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+            def read(self, limit): return json.dumps({'id': json.loads(sent[-1].data)['request_id']}).encode()
+        sent = []
+        class Opener:
+            def open(self, request, timeout):
+                sent.append(request); agents.append(request.get_header('User-agent'))
+                return Response()
+        with patch.object(tickets.urllib.request, 'build_opener', return_value=Opener()):
+            tickets.create(config, self.root / 'ticket.json', 'spare')
+        self.assertTrue(agents[0] and not agents[0].startswith('Python-urllib'))
+
+
+class SeedCloudUrlTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.ticket = self.root / 'ticket.json'
+        self.ticket.write_text(json.dumps({'cloud_url': 'https://api.example', 'ticket_id': 't', 'token': 'x', 'name': 'n'}))
+        self.installer = self.root / 'installer.json'
+
+    def urls(self, installer, override=None):
+        self.installer.write_text(json.dumps({'credential': 'test-only', **installer}))
+        return seeds.seed_urls(self.ticket, self.installer, override)
+
+    def test_api_from_ticket_and_browser_link_from_installer(self):
+        self.assertEqual(self.urls({'cloud_url': 'https://api.example', 'public_url': 'https://brand.example/'}),
+                         {'CLOUD_BASE_URL': 'https://api.example', 'CLOUD_PUBLIC_BASE_URL': 'https://brand.example'})
+
+    def test_older_installer_without_public_url_uses_the_api(self):
+        self.assertEqual(self.urls({'cloud_url': 'https://api.example'})['CLOUD_PUBLIC_BASE_URL'], 'https://api.example')
+
+    def test_conflicting_override_is_refused(self):
+        with self.assertRaises(ValueError): self.urls({}, override='https://other.example')
+        self.assertEqual(self.urls({}, override='https://api.example/')['CLOUD_BASE_URL'], 'https://api.example')
+
+
+seeds = module('seeds', 'provision/seed-cloud-urls.py')
+
 
 if __name__ == '__main__': unittest.main()
