@@ -56,6 +56,8 @@ services:
       SITE_CONFIG_PATH: /app/storage/site-config.sim.yml
       BUILTIN_PROFILES_DIR: /app/profiles
       SITE_PROFILES_DIR: /app/storage/site-profiles
+      # Development-only controls such as the zone page's re-map button.
+      SITE_AGENT_DEV_TOOLS: "1"
     volumes:
       - ${SETPOINT_DIR:-../setpoint}/site-agent:/app/site-agent
       - ${SETPOINT_DIR:-../setpoint}/profiles:/app/profiles:ro
