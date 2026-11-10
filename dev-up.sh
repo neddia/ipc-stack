@@ -57,6 +57,20 @@ mkdir -p "$SECRETS_DIR"
 
 IPC_SECRETS_DIR="$SECRETS_DIR" "$STACK_DIR/scripts/gen-ipc-secrets.sh"
 
+# A dev stack pointed at a local Toops Cloud (toops-cloud/scripts/dev-up.sh)
+# must trust that cloud's licence key: the repo key below is production's, and
+# licences signed locally would fail verification against it.
+LOCAL_CLOUD_KEY="${TOOPS_CLOUD_DIR:-$STACK_DIR/../toops-cloud}/.secrets/cloud.license.ed25519.pub"
+case "${CLOUD_BASE_URL:-}" in
+  http://api:*|http://localhost*|http://127.0.0.1*)
+    if [ -s "$LOCAL_CLOUD_KEY" ] && ! cmp -s "$LOCAL_CLOUD_KEY" "$SECRETS_DIR/cloud.license.ed25519.pub"; then
+      cp "$LOCAL_CLOUD_KEY" "$SECRETS_DIR/cloud.license.ed25519.pub"
+      chmod 0644 "$SECRETS_DIR/cloud.license.ed25519.pub" 2>/dev/null || true
+      echo "[ipc-dev] trusting the local Toops Cloud licence key from $LOCAL_CLOUD_KEY"
+    fi
+    ;;
+esac
+
 if [ ! -s "$SECRETS_DIR/cloud.license.ed25519.pub" ] && [ -s "$REPO_LICENSE_KEY" ]; then
   cp "$REPO_LICENSE_KEY" "$SECRETS_DIR/cloud.license.ed25519.pub"
   chmod 0644 "$SECRETS_DIR/cloud.license.ed25519.pub" 2>/dev/null || true

@@ -79,6 +79,9 @@ services:
     volumes:
       - ${SETPOINT_DIR:-../setpoint}/site-agent:/app/site-agent
       - ${SETPOINT_DIR:-../setpoint}/profiles:/app/profiles:ro
+      # Release images trust only the licence key baked in at this path. Dev
+      # mounts its own, which dev-up.sh points at the local Toops Cloud.
+      - ${IPC_SECRETS_DIR:-./.secrets}/cloud.license.ed25519.pub:/app/cloud.license.ed25519.pub:ro
     depends_on:
       influxdb:
         condition: service_started
